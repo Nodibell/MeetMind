@@ -1,0 +1,182 @@
+//
+//  MeetingDetailView.swift
+//  MeetMind
+//
+//  Created by Oleksii Chumak on 06.05.2026.
+//
+
+import SwiftUI
+import SwiftData
+
+/// Post-recording split view: transcript on left, summary on right
+struct MeetingDetailView: View {
+    @Bindable var viewModel: MeetingDetailViewModel
+    @Environment(\.modelContext) private var modelContext
+    
+    @State private var tagInput: String = ""
+    @State private var showTagInput = false
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Top bar
+            topBar
+            
+            // Banners
+            if let error = viewModel.errorMessage {
+                ErrorBannerView(
+                    message: error,
+                    style: .error,
+                    onDismiss: { viewModel.errorMessage = nil }
+                )
+                .padding(.horizontal, Theme.Spacing.lg)
+                .padding(.top, Theme.Spacing.sm)
+            }
+            
+            if viewModel.exportSuccess {
+                ErrorBannerView(
+                    message: "Успішно експортовано в Obsidian!",
+                    style: .success,
+                    onDismiss: { viewModel.exportSuccess = false }
+                )
+                .padding(.horizontal, Theme.Spacing.lg)
+                .padding(.top, Theme.Spacing.sm)
+            }
+            
+            // Split view
+            HSplitView {
+                TranscriptPanelView(
+                    segments: viewModel.filteredSegments,
+                    searchText: $viewModel.searchText,
+                    isLoading: viewModel.isLoadingTranscript
+                )
+                .frame(minWidth: 300)
+                
+                SummaryPanelView(
+                    summary: viewModel.summary,
+                    streamingSummary: viewModel.streamingSummary,
+                    isGenerating: viewModel.isRegeneratingSummary,
+                    onRegenerate: {
+                        Task { await viewModel.regenerateSummary() }
+                    },
+                    onCopy: { viewModel.copySummary() },
+                    onExport: { viewModel.exportToObsidian() }
+                )
+                .frame(minWidth: 300)
+            }
+        }
+        .background(Theme.Colors.backgroundPrimary)
+        .task {
+            viewModel.setModelContext(modelContext)
+            await viewModel.loadData()
+        }
+    }
+    
+    // MARK: - Top Bar
+    
+    private var topBar: some View {
+        VStack(spacing: Theme.Spacing.sm) {
+            HStack(spacing: Theme.Spacing.md) {
+                // Meeting title
+                VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+                    TextField("Назва наради", text: $viewModel.meetingTitle)
+                        .font(Theme.Typography.title2)
+                        .foregroundStyle(Theme.Colors.textPrimary)
+                        .textFieldStyle(.plain)
+                        .onSubmit {
+                            viewModel.updateMeetingTitle()
+                        }
+                    
+                    HStack(spacing: Theme.Spacing.md) {
+                        Label(viewModel.meeting.displayDate, systemImage: "calendar")
+                            .font(Theme.Typography.caption)
+                            .foregroundStyle(Theme.Colors.textSecondary)
+                        
+                        Label(viewModel.meeting.displayDuration, systemImage: "clock")
+                            .font(Theme.Typography.caption)
+                            .foregroundStyle(Theme.Colors.textSecondary)
+                        
+                        StatusBadgeView(status: viewModel.meeting.status)
+                    }
+                }
+                
+                Spacer()
+                
+                // Actions
+                HStack(spacing: Theme.Spacing.sm) {
+                    Button(action: { viewModel.copyTranscript() }) {
+                        Label("Транскрипт", systemImage: "doc.on.doc")
+                            .font(Theme.Typography.caption)
+                    }
+                    .buttonStyle(.bordered)
+                    
+                    Button(action: { viewModel.exportToObsidian() }) {
+                        Label("Obsidian", systemImage: "square.and.arrow.up")
+                            .font(Theme.Typography.caption)
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+            
+            // Tags
+            tagsRow
+        }
+        .padding(.horizontal, Theme.Spacing.xxl)
+        .padding(.vertical, Theme.Spacing.lg)
+        .background(Theme.Colors.backgroundSecondary.opacity(0.5))
+    }
+    
+    // MARK: - Tags
+    
+    private var tagsRow: some View {
+        HStack(spacing: Theme.Spacing.xs) {
+            ForEach(viewModel.meeting.tags, id: \.self) { tag in
+                HStack(spacing: 4) {
+                    Text("#\(tag)")
+                        .font(Theme.Typography.footnote)
+                        .foregroundStyle(Theme.Colors.textSecondary)
+                    
+                    Button(action: { viewModel.removeTag(tag) }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(Theme.Colors.textTertiary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, Theme.Spacing.sm)
+                .padding(.vertical, Theme.Spacing.xxs)
+                .background(tag.tagColor)
+                .clipShape(Capsule())
+            }
+            
+            // Add tag button
+            if showTagInput {
+                TextField("тег", text: $tagInput)
+                    .font(Theme.Typography.footnote)
+                    .textFieldStyle(.plain)
+                    .frame(width: 80)
+                    .padding(.horizontal, Theme.Spacing.sm)
+                    .padding(.vertical, Theme.Spacing.xxs)
+                    .background(Theme.Colors.backgroundTertiary)
+                    .clipShape(Capsule())
+                    .onSubmit {
+                        viewModel.addTag(tagInput)
+                        tagInput = ""
+                        showTagInput = false
+                    }
+            } else {
+                Button(action: { showTagInput = true }) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Theme.Colors.textTertiary)
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, Theme.Spacing.xs)
+                .padding(.vertical, Theme.Spacing.xxs)
+                .background(Theme.Colors.backgroundTertiary.opacity(0.5))
+                .clipShape(Circle())
+            }
+            
+            Spacer()
+        }
+    }
+}

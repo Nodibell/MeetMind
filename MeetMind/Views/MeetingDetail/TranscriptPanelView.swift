@@ -1,0 +1,153 @@
+//
+//  TranscriptPanelView.swift
+//  MeetMind
+//
+//  Created by Oleksii Chumak on 06.05.2026.
+//
+
+import SwiftUI
+
+/// Full transcript panel with timestamps, search, and text selection
+struct TranscriptPanelView: View {
+    let segments: [MeetingTranscriptSegment]
+    @Binding var searchText: String
+    var isLoading: Bool = false
+    
+    @State private var highlightedSegmentID: UUID?
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Label("Транскрипт", systemImage: "text.quote")
+                    .font(Theme.Typography.headline)
+                    .foregroundStyle(Theme.Colors.textPrimary)
+                
+                Spacer()
+                
+                // Search
+                HStack(spacing: Theme.Spacing.xs) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.Colors.textTertiary)
+                    
+                    TextField("Пошук...", text: $searchText)
+                        .font(Theme.Typography.caption)
+                        .textFieldStyle(.plain)
+                        .frame(width: 120)
+                }
+                .padding(.horizontal, Theme.Spacing.sm)
+                .padding(.vertical, Theme.Spacing.xxs)
+                .background(Theme.Colors.backgroundTertiary)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.CornerRadius.sm))
+            }
+            .padding(.horizontal, Theme.Spacing.lg)
+            .padding(.vertical, Theme.Spacing.md)
+            
+            Divider()
+                .background(Theme.Colors.borderSubtle)
+            
+            // Content
+            if isLoading {
+                loadingState
+            } else if segments.isEmpty {
+                emptyState
+            } else {
+                transcriptContent
+            }
+        }
+        .background(Theme.Colors.backgroundSecondary.opacity(0.3))
+    }
+    
+    // MARK: - Content
+    
+    private var transcriptContent: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(segments) { segment in
+                        TranscriptDetailRow(
+                            segment: segment,
+                            isHighlighted: segment.id == highlightedSegmentID,
+                            searchText: searchText
+                        )
+                        .id(segment.id)
+                        .onTapGesture {
+                            withAnimation(Theme.Animation.fast) {
+                                highlightedSegmentID = segment.id
+                            }
+                        }
+                        
+                        Divider()
+                            .background(Theme.Colors.borderSubtle.opacity(0.5))
+                            .padding(.leading, 60)
+                    }
+                }
+                .padding(.vertical, Theme.Spacing.sm)
+            }
+        }
+    }
+    
+    private var loadingState: some View {
+        VStack(spacing: Theme.Spacing.md) {
+            ProgressView()
+                .tint(Theme.Colors.accentPrimary)
+            Text("Завантаження транскрипту...")
+                .font(Theme.Typography.caption)
+                .foregroundStyle(Theme.Colors.textTertiary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    private var emptyState: some View {
+        VStack(spacing: Theme.Spacing.md) {
+            Image(systemName: "doc.text")
+                .font(.system(size: 32))
+                .foregroundStyle(Theme.Colors.textTertiary)
+            Text("Транскрипт відсутній")
+                .font(Theme.Typography.body)
+                .foregroundStyle(Theme.Colors.textTertiary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Detail Row
+
+struct TranscriptDetailRow: View {
+    let segment: MeetingTranscriptSegment
+    var isHighlighted: Bool = false
+    var searchText: String = ""
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: Theme.Spacing.md) {
+            // Timestamp
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(segment.startTime.formattedTimestamp)
+                    .font(Theme.Typography.monoCaption)
+                    .foregroundStyle(Theme.Colors.accentSecondary)
+                
+                Text(segment.endTime.formattedTimestamp)
+                    .font(Theme.Typography.monoCaption)
+                    .foregroundStyle(Theme.Colors.textTertiary)
+            }
+            .frame(width: 45, alignment: .trailing)
+            
+            // Vertical line
+            Rectangle()
+                .fill(isHighlighted ? Theme.Colors.accentPrimary : Theme.Colors.borderSubtle)
+                .frame(width: 2)
+                .clipShape(RoundedRectangle(cornerRadius: 1))
+            
+            // Text
+            Text(segment.text)
+                .font(Theme.Typography.body)
+                .foregroundStyle(Theme.Colors.textPrimary)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, Theme.Spacing.lg)
+        .padding(.vertical, Theme.Spacing.sm)
+        .background(isHighlighted ? Theme.Colors.accentPrimary.opacity(0.08) : .clear)
+    }
+}

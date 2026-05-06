@@ -1,0 +1,35 @@
+# Xcode
+#
+# gitignore contributors: code-review, tyilo, danydev, matthewwithanm
+
+## Build results
+build/
+DerivedData/
+*.hmap
+*.ipa
+*.playground.generated.swift
+*.xcuserstate
+
+## Dependency Manager
+Pods/
+Carthage/Build/
+.swiftpm/
+.build/
+
+## Root-level files (Build logs)
+build_log*.txt
+
+## macOS
+.DS_Store
+*.swp
+*.lock
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+
+## MeetMind Specific
+# Don't commit the audio recordings
+Recordings/
+
+## User Settings
+xcuserdata/
