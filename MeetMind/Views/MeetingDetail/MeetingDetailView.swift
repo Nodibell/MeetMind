@@ -61,6 +61,7 @@ struct MeetingDetailView: View {
                     SummaryPanelView(
                         summary: viewModel.summary,
                         streamingSummary: viewModel.streamingSummary,
+                        selectedLanguage: Bindable(viewModel).selectedSummaryLanguage,
                         isGenerating: viewModel.isRegeneratingSummary,
                         onRegenerate: {
                             Task { await viewModel.regenerateSummary() }

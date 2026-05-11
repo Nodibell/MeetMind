@@ -7,11 +7,28 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		31B3A748CFDADEA68CDE40EE /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5017A4C7AE0A453E64992C44 /* Foundation.framework */; };
+		4321F5725102B5645B211094 /* AppSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65026034DB6EE24C4B3B37DE /* AppSettingsTests.swift */; };
 		4C1507582FAB90E0007C784F /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4C1507572FAB90E0007C784F /* WhisperKit */; };
+		5C780215514CAF440FE1B77C /* LLMServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD18B9F1ACC65366B7756B10 /* LLMServiceTests.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		6613E21FC31BBE53F3288240 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 4CDCD33E2FAB7C4900DCA3CB /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 4CDCD3452FAB7C4900DCA3CB;
+			remoteInfo = MeetMind;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		4CDCD3462FAB7C4900DCA3CB /* MeetMind.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MeetMind.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5017A4C7AE0A453E64992C44 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		65026034DB6EE24C4B3B37DE /* AppSettingsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppSettingsTests.swift; sourceTree = "<group>"; };
+		9A3400E9346BBAF29EA982B5 /* MeetMindTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MeetMindTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		FD18B9F1ACC65366B7756B10 /* LLMServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LLMServiceTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -36,6 +53,14 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		094D4FFD04CE1F7AA4426B95 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				31B3A748CFDADEA68CDE40EE /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		4CDCD3432FAB7C4900DCA3CB /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -52,6 +77,8 @@
 			children = (
 				4CDCD3482FAB7C4900DCA3CB /* MeetMind */,
 				4CDCD3472FAB7C4900DCA3CB /* Products */,
+				BA2A7CEB3C5DA17A1582A891 /* Frameworks */,
+				6FC550D0BE06B61E63C54ADE /* MeetMindTests */,
 			);
 			sourceTree = "<group>";
 		};
@@ -59,13 +86,58 @@
 			isa = PBXGroup;
 			children = (
 				4CDCD3462FAB7C4900DCA3CB /* MeetMind.app */,
+				9A3400E9346BBAF29EA982B5 /* MeetMindTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		6FC550D0BE06B61E63C54ADE /* MeetMindTests */ = {
+			isa = PBXGroup;
+			children = (
+				65026034DB6EE24C4B3B37DE /* AppSettingsTests.swift */,
+				FD18B9F1ACC65366B7756B10 /* LLMServiceTests.swift */,
+			);
+			name = MeetMindTests;
+			path = MeetMindTests;
+			sourceTree = "<group>";
+		};
+		94A19996905A8FB0C26E48B0 /* OS X */ = {
+			isa = PBXGroup;
+			children = (
+				5017A4C7AE0A453E64992C44 /* Foundation.framework */,
+			);
+			name = "OS X";
+			sourceTree = "<group>";
+		};
+		BA2A7CEB3C5DA17A1582A891 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				94A19996905A8FB0C26E48B0 /* OS X */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		46E3C78739D07C1ED011B07E /* MeetMindTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 80E10A4774A3668B43D5F580 /* Build configuration list for PBXNativeTarget "MeetMindTests" */;
+			buildPhases = (
+				8844CCB0578CF12258E9EC5E /* Sources */,
+				094D4FFD04CE1F7AA4426B95 /* Frameworks */,
+				18C9BE8697A133326B561BC8 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				E9E2399431B4D3637B1ACF45 /* PBXTargetDependency */,
+			);
+			name = MeetMindTests;
+			productName = MeetMindTests;
+			productReference = 9A3400E9346BBAF29EA982B5 /* MeetMindTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		4CDCD3452FAB7C4900DCA3CB /* MeetMind */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 4CDCD3532FAB7C4A00DCA3CB /* Build configuration list for PBXNativeTarget "MeetMind" */;
@@ -122,11 +194,19 @@
 			projectRoot = "";
 			targets = (
 				4CDCD3452FAB7C4900DCA3CB /* MeetMind */,
+				46E3C78739D07C1ED011B07E /* MeetMindTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		18C9BE8697A133326B561BC8 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		4CDCD3442FAB7C4900DCA3CB /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -144,7 +224,25 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		8844CCB0578CF12258E9EC5E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4321F5725102B5645B211094 /* AppSettingsTests.swift in Sources */,
+				5C780215514CAF440FE1B77C /* LLMServiceTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		E9E2399431B4D3637B1ACF45 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = MeetMind;
+			target = 4CDCD3452FAB7C4900DCA3CB /* MeetMind */;
+			targetProxy = 6613E21FC31BBE53F3288240 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		4CDCD3512FAB7C4A00DCA3CB /* Debug */ = {
@@ -275,11 +373,12 @@
 				CODE_SIGN_ENTITLEMENTS = MeetMind/MeetMind.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 72UFS7AJ5R;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MeetMind/Info.plist;
@@ -290,7 +389,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = oleksii.chumak.MeetMind;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -311,11 +410,12 @@
 				CODE_SIGN_ENTITLEMENTS = MeetMind/MeetMind.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 72UFS7AJ5R;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MeetMind/Info.plist;
@@ -326,7 +426,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = oleksii.chumak.MeetMind;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -336,6 +436,32 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		8F93B125333E1B751C866584 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nodibell.MeetMindTests;
+				PRODUCT_MODULE_NAME = MeetMindTests;
+				PRODUCT_NAME = MeetMindTests;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MeetMind.app/Contents/MacOS/MeetMind";
+			};
+			name = Debug;
+		};
+		AEFA44FA9CF9391E092D70AE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nodibell.MeetMindTests;
+				PRODUCT_MODULE_NAME = MeetMindTests;
+				PRODUCT_NAME = MeetMindTests;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MeetMind.app/Contents/MacOS/MeetMind";
 			};
 			name = Release;
 		};
@@ -356,6 +482,15 @@
 			buildConfigurations = (
 				4CDCD3542FAB7C4A00DCA3CB /* Debug */,
 				4CDCD3552FAB7C4A00DCA3CB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		80E10A4774A3668B43D5F580 /* Build configuration list for PBXNativeTarget "MeetMindTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AEFA44FA9CF9391E092D70AE /* Release */,
+				8F93B125333E1B751C866584 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

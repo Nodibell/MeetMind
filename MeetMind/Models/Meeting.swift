@@ -48,6 +48,7 @@ final class Meeting {
     var tags: [String]
     var transcriptPath: String?
     var summaryPath: String?
+    var summaryLanguage: String? // Language selected for THIS meeting's summary
     var audioPath: String?
     @Attribute var statusRaw: String
     var isExportedToObsidian: Bool
@@ -87,6 +88,6 @@ final class Meeting {
     }
     
     var filenameBase: String {
-        "\(date.filenameDateFormatted) - \(title.filenameSafe)"
+        "\(date.filenameDateFormatted) - \(title.filenameSafe) - \(id.uuidString.prefix(6))"
     }
 }

@@ -11,6 +11,7 @@ import SwiftUI
 struct SummaryPanelView: View {
     let summary: String
     let streamingSummary: String
+    @Binding var selectedLanguage: String
     var isGenerating: Bool = false
     var onRegenerate: (() -> Void)?
     var onCopy: (() -> Void)?
@@ -39,7 +40,7 @@ struct SummaryPanelView: View {
                 
                 // Action buttons
                 HStack(spacing: Theme.Spacing.sm) {
-                    Picker("", selection: Bindable(AppSettings.shared).summaryLanguage) {
+                    Picker("", selection: $selectedLanguage) {
                         ForEach(AppSettings.supportedLanguages, id: \.code) { lang in
                             Text(lang.name).tag(lang.code)
                         }
@@ -115,7 +116,7 @@ struct SummaryPanelView: View {
             if isGenerating {
                 StreamingMarkdownView(text: streamingSummary, isStreaming: true)
             } else if !displayText.isEmpty {
-                MarkdownRendererView(markdown: displayText)
+                MarkdownWebView(markdown: displayText)
             } else {
                 emptyState
             }
@@ -180,6 +181,7 @@ struct SummaryPanelView: View {
         - Ollama для LLM
         """,
         streamingSummary: "",
+        selectedLanguage: .constant("uk"),
         isGenerating: false,
         onRegenerate: {},
         onCopy: {},

@@ -25,6 +25,12 @@ final class MeetingDetailViewModel {
     var errorMessage: String?
     var searchText: String = ""
     var exportSuccess: Bool = false
+    var selectedSummaryLanguage: String {
+        didSet {
+            meeting.summaryLanguage = selectedSummaryLanguage
+            try? modelContext?.save()
+        }
+    }
     
     // MARK: - Services
     private let llmService: LLMService
@@ -44,6 +50,7 @@ final class MeetingDetailViewModel {
     init(meeting: Meeting, llmService: LLMService) {
         self.meeting = meeting
         self.meetingTitle = meeting.title
+        self.selectedSummaryLanguage = meeting.summaryLanguage ?? AppSettings.shared.summaryLanguage
         self.llmService = llmService
     }
     
@@ -162,16 +169,27 @@ final class MeetingDetailViewModel {
         
         await MainActor.run {
             isTranslatingTranscript = true
+            translatedTranscript = ""
             errorMessage = nil
         }
         
         translationTask?.cancel()
         
+        await llmService.setOnTokenReceived { [weak self] token in
+            guard let self else { return }
+            Task { @MainActor in
+                if self.translatedTranscript == nil {
+                    self.translatedTranscript = token
+                } else {
+                    self.translatedTranscript! += token
+                }
+            }
+        }
+        
         translationTask = Task {
             do {
-                let translated = try await llmService.translateText(text: transcriptText, to: languageName)
+                _ = try await llmService.translateText(text: transcriptText, to: languageName)
                 await MainActor.run {
-                    self.translatedTranscript = translated
                     self.isTranslatingTranscript = false
                 }
             } catch {
@@ -184,6 +202,7 @@ final class MeetingDetailViewModel {
             }
         }
     }
+
 
     // MARK: - Regenerate Summary
     
@@ -207,7 +226,7 @@ final class MeetingDetailViewModel {
 
         summaryTask = Task {
             do {
-                let targetLanguage = AppSettings.shared.summaryLanguage
+                let targetLanguage = await MainActor.run { self.selectedSummaryLanguage }
                 let newSummary = try await llmService.generateSummary(transcript: transcriptText, targetLanguage: targetLanguage)
 
                 await MainActor.run {

@@ -167,7 +167,10 @@ private struct ChatMessageRow: View {
                         .foregroundStyle(.white)
                         .textSelection(.enabled)
                 } else {
-                    MarkdownRendererView(markdown: message.content)
+                    Text(.init(message.content))
+                        .font(Theme.Typography.body)
+                        .foregroundStyle(Theme.Colors.textPrimary)
+                        .textSelection(.enabled)
                 }
             }
             .padding(isUser ? Theme.Spacing.sm : 0)
