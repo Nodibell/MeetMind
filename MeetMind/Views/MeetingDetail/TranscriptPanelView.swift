@@ -176,11 +176,21 @@ struct TranscriptDetailRow: View {
                 .clipShape(RoundedRectangle(cornerRadius: 1))
             
             // Text
-            Text(segment.text)
-                .font(Theme.Typography.body)
-                .foregroundStyle(Theme.Colors.textPrimary)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 4) {
+                if let speaker = segment.speakerID {
+                    Text(speaker.replacingOccurrences(of: "Speaker ", with: "Диктор "))
+                        .font(Theme.Typography.caption)
+                        .fontWeight(.bold)
+                        .foregroundStyle(Theme.Colors.accentPrimary)
+                        .padding(.bottom, 2)
+                }
+                
+                Text(segment.text)
+                    .font(Theme.Typography.body)
+                    .foregroundStyle(Theme.Colors.textPrimary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
         .padding(.horizontal, Theme.Spacing.lg)
         .padding(.vertical, Theme.Spacing.sm)

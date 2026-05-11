@@ -30,33 +30,49 @@ struct AudioWaveformView: View {
                     guard levelIndex >= 0, levelIndex < levels.count else { continue }
                     
                     let level = CGFloat(levels[levelIndex])
-                    let barHeight = max(level * maxBarHeight, 3)
+                    let barHeight = max(level * maxBarHeight, 4)
                     
                     let x = CGFloat(i) * (barWidth + barSpacing)
                     let y = centerY - barHeight / 2
                     
-                    let rect = RoundedRectangle(cornerRadius: barWidth / 2)
+                    let rectPath = RoundedRectangle(cornerRadius: barWidth / 2)
                         .path(in: CGRect(x: x, y: y, width: barWidth, height: barHeight))
                     
-                    // Gradient based on level
-                    let opacity = isActive ? (0.4 + level * 0.6) : 0.2
-                    let color = isActive
+                    let opacity = isActive ? (0.5 + level * 0.5) : 0.2
+                    let baseColor = isActive
                         ? interpolateColor(level: level)
                         : Theme.Colors.waveformInactive
                     
-                    context.fill(rect, with: .color(color.opacity(opacity)))
+                    // 1. Draw Glow (Outer)
+                    if isActive && level > 0.1 {
+                        var glowContext = context
+                        glowContext.addFilter(.blur(radius: 3))
+                        glowContext.fill(rectPath, with: .color(baseColor.opacity(0.3 * level)))
+                    }
+                    
+                    // 2. Draw Bar with Gradient
+                    let gradient = Gradient(colors: [
+                        baseColor.opacity(opacity),
+                        baseColor.opacity(opacity * 0.7)
+                    ])
+                    context.fill(rectPath, with: .linearGradient(
+                        gradient,
+                        startPoint: CGPoint(x: x, y: y),
+                        endPoint: CGPoint(x: x, y: y + barHeight)
+                    ))
                 }
             }
         }
     }
     
     private func interpolateColor(level: CGFloat) -> Color {
-        if level > 0.7 {
-            return Theme.Colors.accentTertiary
-        } else if level > 0.3 {
-            return Theme.Colors.accentPrimary
+        // Smooth transition from Blue to Purple to Pink
+        if level > 0.8 {
+            return Color(red: 0.9, green: 0.3, blue: 0.8) // Pink/Magenta
+        } else if level > 0.4 {
+            return Theme.Colors.accentPrimary // Bright Blue
         } else {
-            return Theme.Colors.accentSecondary
+            return Theme.Colors.accentSecondary.opacity(0.8) // Teal/Cyan
         }
     }
 }

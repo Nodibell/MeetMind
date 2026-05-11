@@ -41,7 +41,12 @@ struct SettingsView: View {
     private var generalTab: some View {
         Form {
             Section("Мова") {
-                Picker("Мова за замовчуванням", selection: $viewModel.settings.defaultLanguage) {
+                Picker("Мова інтерфейсу", selection: $viewModel.settings.appLanguage) {
+                    Text("Українська").tag("uk")
+                    Text("English").tag("en")
+                }
+
+                Picker("Транскрипція (за замовчуванням)", selection: $viewModel.settings.defaultLanguage) {
                     ForEach(AppSettings.supportedLanguages, id: \.code) { lang in
                         Text(lang.name).tag(lang.code)
                     }

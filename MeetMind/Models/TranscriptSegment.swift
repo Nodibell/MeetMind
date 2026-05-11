@@ -13,6 +13,7 @@ struct MeetingTranscriptSegment: Codable, Identifiable, Sendable, Equatable {
     let startTime: TimeInterval
     let endTime: TimeInterval
     let text: String
+    let speakerID: String?
     let language: String?
     
     nonisolated init(
@@ -20,12 +21,14 @@ struct MeetingTranscriptSegment: Codable, Identifiable, Sendable, Equatable {
         startTime: TimeInterval,
         endTime: TimeInterval,
         text: String,
+        speakerID: String? = nil,
         language: String? = nil
     ) {
         self.id = id
         self.startTime = startTime
         self.endTime = endTime
         self.text = text
+        self.speakerID = speakerID
         self.language = language
     }
     

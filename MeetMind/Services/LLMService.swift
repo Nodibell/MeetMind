@@ -246,6 +246,61 @@ actor LLMService {
             ]
         )
     }
+
+    /// Generic streaming response generation
+    func generateResponseStream(prompt: String, systemPrompt: String) -> AsyncThrowingStream<String, Error> {
+        return AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    let messages = [
+                        ChatMessage(role: "system", content: systemPrompt),
+                        ChatMessage(role: "user", content: prompt)
+                    ]
+                    
+                    let request = ChatRequest(
+                        model: AppSettings.shared.ollamaModel,
+                        messages: messages,
+                        stream: true,
+                        options: .init(temperature: 0.7, num_predict: 2048, top_p: 0.9)
+                    )
+                    
+                    let endpoint = AppSettings.shared.ollamaEndpoint
+                    guard let url = URL(string: "\(endpoint)/api/chat") else {
+                        continuation.finish(throwing: URLError(.badURL))
+                        return
+                    }
+                    
+                    var urlRequest = URLRequest(url: url)
+                    urlRequest.httpMethod = "POST"
+                    urlRequest.httpBody = try JSONEncoder().encode(request)
+                    urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    
+                    updateState(.generating)
+                    
+                    let (stream, _) = try await URLSession.shared.bytes(for: urlRequest)
+                    
+                    for try await line in stream.lines {
+                        guard let data = line.data(using: .utf8) else { continue }
+                        let decoded = try JSONDecoder().decode(ChatStreamResponse.self, from: data)
+                        
+                        if let content = decoded.message?.content {
+                            continuation.yield(content)
+                        }
+                        
+                        if decoded.done {
+                            break
+                        }
+                    }
+                    
+                    updateState(.idle)
+                    continuation.finish()
+                } catch {
+                    updateState(.idle)
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+    }
     
     // MARK: - Chunked Summary (Long Meetings)
     

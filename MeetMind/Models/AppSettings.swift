@@ -34,6 +34,13 @@ final class AppSettings: @unchecked Sendable {
         static let whisperModelPost         = "whisperModelPost"
         static let watchFolderPath          = "watchFolderPath"
         static let autoProcessWatchFolder   = "autoProcessWatchFolder"
+        static let appLanguage              = "appLanguage"
+    }
+
+    // MARK: - App Language
+    
+    var appLanguage: String {
+        didSet { UserDefaults.standard.set(appLanguage, forKey: Keys.appLanguage) }
     }
 
     // MARK: - Obsidian
@@ -132,6 +139,7 @@ final class AppSettings: @unchecked Sendable {
         ollamaModel             = UserDefaults.standard.string(forKey: Keys.ollamaModel) ?? Constants.defaultOllamaModel
         ollamaEndpoint          = UserDefaults.standard.string(forKey: Keys.ollamaEndpoint) ?? Constants.defaultOllamaEndpoint
         customSummaryPrompt     = UserDefaults.standard.string(forKey: Keys.customSummaryPrompt) ?? ""
+        appLanguage             = UserDefaults.standard.string(forKey: Keys.appLanguage) ?? "uk"
 
         // --- Whisper models (with legacy name migration) ---
         let liveRaw = UserDefaults.standard.string(forKey: Keys.whisperModelLive) ?? Constants.liveTranscriptionModel

@@ -30,7 +30,8 @@ struct MeetMindApp: App {
     @State private var transcriptionService = TranscriptionService()
     @State private var llmService = LLMService()
     
-    // MARK: - Settings ViewModel
+    // MARK: - Settings
+    @State private var appSettings = AppSettings.shared
     @State private var settingsViewModel: SettingsViewModel?
     
     var body: some Scene {
@@ -41,6 +42,7 @@ struct MeetMindApp: App {
                 transcriptionService: transcriptionService,
                 llmService: llmService
             )
+            .environment(\.locale, .init(identifier: appSettings.appLanguage))
             .frame(minWidth: 800, minHeight: 550)
             .background(Theme.Colors.backgroundPrimary)
             .preferredColorScheme(.dark)
@@ -66,6 +68,7 @@ struct MeetMindApp: App {
         Settings {
             if let vm = settingsViewModel {
                 SettingsView(viewModel: vm)
+                    .environment(\.locale, .init(identifier: appSettings.appLanguage))
             } else {
                 ProgressView("Ініціалізація...")
                     .frame(width: 550, height: 420)

@@ -11,6 +11,7 @@
 		4321F5725102B5645B211094 /* AppSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65026034DB6EE24C4B3B37DE /* AppSettingsTests.swift */; };
 		4C1507582FAB90E0007C784F /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4C1507572FAB90E0007C784F /* WhisperKit */; };
 		5C780215514CAF440FE1B77C /* LLMServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD18B9F1ACC65366B7756B10 /* LLMServiceTests.swift */; };
+		EBFCFF4796D7061B0C2285F6 /* SpeakerKit in Frameworks */ = {isa = PBXBuildFile; productRef = D6AC83B81297D9491D198D6A /* SpeakerKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -66,6 +67,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				4C1507582FAB90E0007C784F /* WhisperKit in Frameworks */,
+				EBFCFF4796D7061B0C2285F6 /* SpeakerKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -156,6 +158,7 @@
 			name = MeetMind;
 			packageProductDependencies = (
 				4C1507572FAB90E0007C784F /* WhisperKit */,
+				D6AC83B81297D9491D198D6A /* SpeakerKit */,
 			);
 			productName = MeetMind;
 			productReference = 4CDCD3462FAB7C4900DCA3CB /* MeetMind.app */;
@@ -373,7 +376,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeetMind/MeetMind.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 9;
 				DEVELOPMENT_TEAM = 72UFS7AJ5R;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -389,7 +392,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.4;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = oleksii.chumak.MeetMind;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -410,7 +413,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeetMind/MeetMind.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 9;
 				DEVELOPMENT_TEAM = 72UFS7AJ5R;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -426,7 +429,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.4;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = oleksii.chumak.MeetMind;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -513,6 +516,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 4C1507562FAB90E0007C784F /* XCRemoteSwiftPackageReference "argmax-oss-swift" */;
 			productName = WhisperKit;
+		};
+		D6AC83B81297D9491D198D6A /* SpeakerKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4C1507562FAB90E0007C784F /* XCRemoteSwiftPackageReference "argmax-oss-swift" */;
+			productName = SpeakerKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

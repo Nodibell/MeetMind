@@ -45,27 +45,32 @@ struct MeetingListView: View {
                 .background(Theme.Colors.borderSubtle)
             
             // Meeting list
-            if filteredMeetings.isEmpty {
-                emptyState
-            } else {
-                List(selection: $selectedMeetingID) {
-                    ForEach(filteredMeetings) { meeting in
-                        MeetingRowView(meeting: meeting)
-                            .tag(meeting.id)
-                            .contextMenu {
-                                Button("Видалити", role: .destructive) {
-                                    meetingToDelete = meeting
+            List(selection: $selectedMeetingID) {
+                Section("Smart") {
+                    Label("Глобальний запит", systemImage: "sparkles.magnifyingglass")
+                        .tag(UUID.globalSearch)
+                    
+                    Label("Завдання (Action Items)", systemImage: "checklist")
+                        .tag(UUID.actionItems)
+                }
+
+                Section("Наради") {
+                    if filteredMeetings.isEmpty {
+                        Text("Тут нічого немає")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(filteredMeetings) { meeting in
+                            MeetingRowView(meeting: meeting)
+                                .tag(meeting.id)
+                                .contextMenu {
+                                    Button("Видалити", role: .destructive) {
+                                        meetingToDelete = meeting
+                                    }
                                 }
-                            }
-                    }
-                    .onDelete { offsets in
-                        for offset in offsets {
-                            meetingToDelete = filteredMeetings[offset]
                         }
                     }
                 }
-                .listStyle(.sidebar)
-                .scrollContentBackground(.hidden)
             }
         }
         .background(Theme.Colors.backgroundSecondary)

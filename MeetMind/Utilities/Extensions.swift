@@ -8,6 +8,14 @@
 import Foundation
 import SwiftUI
 import CryptoKit
+import AVFoundation
+import NaturalLanguage
+
+// MARK: - Special UUIDs for Sidebar
+extension UUID {
+    static let globalSearch = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+    static let actionItems = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+}
 
 // MARK: - TimeInterval Formatting
 extension TimeInterval {
@@ -164,5 +172,16 @@ extension String {
         let hash = abs(self.hashValue)
         let index = hash % Theme.Colors.tagColors.count
         return Theme.Colors.tagColors[index]
+    }
+}
+
+// MARK: - URL Audio Loading
+extension URL {
+    func loadAudioSamples() throws -> [Float] {
+        let file = try AVAudioFile(forReading: self)
+        let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false)!
+        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(file.length))!
+        try file.read(into: buffer)
+        return Array(UnsafeBufferPointer(start: buffer.floatChannelData![0], count: Int(buffer.frameLength)))
     }
 }
