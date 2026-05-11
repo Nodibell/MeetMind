@@ -131,9 +131,16 @@ struct RecordingView: View {
     
     private var processingIndicator: some View {
         VStack(spacing: Theme.Spacing.md) {
-            ProgressView()
-                .scaleEffect(0.9)
-                .tint(Theme.Colors.accentPrimary)
+            if viewModel.state == .transcribing && viewModel.transcriptionProgressValue > 0 {
+                ProgressView(value: viewModel.transcriptionProgressValue)
+                    .progressViewStyle(.linear)
+                    .tint(Theme.Colors.accentPrimary)
+                    .frame(maxWidth: 200)
+            } else {
+                ProgressView()
+                    .scaleEffect(0.9)
+                    .tint(Theme.Colors.accentPrimary)
+            }
             
             Text(processingLabel)
                 .font(Theme.Typography.caption)
@@ -144,6 +151,7 @@ struct RecordingView: View {
     
     private var processingLabel: String {
         switch viewModel.state {
+        case .preparing: return "Підготовка джерела аудіо..."
         case .transcribing: return "Транскрипція аудіо (high-quality)..."
         case .summarizing: return "Генерація резюме через AI..."
         case .stopping: return "Зупинка запису..."
@@ -154,7 +162,7 @@ struct RecordingView: View {
     private var statusForState: MeetingStatus {
         switch viewModel.state {
         case .recording: return .recording
-        case .transcribing, .stopping: return .transcribing
+        case .preparing, .transcribing, .stopping: return .transcribing
         case .summarizing: return .summarizing
         case .complete: return .complete
         case .error: return .error

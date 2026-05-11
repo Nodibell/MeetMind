@@ -36,41 +36,60 @@ extension TimeInterval {
 
 // MARK: - Date Formatting
 extension Date {
+    // Cached formatters — DateFormatter creation is expensive (~2ms)
+    private static let isoFormatter: ISO8601DateFormatter = ISO8601DateFormatter()
+
+    private static let displayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "uk_UA")
+        f.dateStyle = .long
+        f.timeStyle = .none
+        return f
+    }()
+
+    private static let shortDisplayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "uk_UA")
+        f.dateFormat = "dd.MM.yyyy, HH:mm"
+        return f
+    }()
+
+    private static let filenameDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.locale = Locale(identifier: "uk_UA")
+        f.unitsStyle = .abbreviated
+        return f
+    }()
+
     /// ISO 8601 format: "2026-05-06T16:45:00+03:00"
     var isoFormatted: String {
-        ISO8601DateFormatter().string(from: self)
+        Date.isoFormatter.string(from: self)
     }
-    
+
     /// Display format: "6 травня 2026" (Ukrainian locale)
     var displayFormatted: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "uk_UA")
-        formatter.dateStyle = .long
-        formatter.timeStyle = .none
-        return formatter.string(from: self)
+        Date.displayFormatter.string(from: self)
     }
-    
+
     /// Short display: "06.05.2026, 16:45"
     var shortDisplayFormatted: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "uk_UA")
-        formatter.dateFormat = "dd.MM.yyyy, HH:mm"
-        return formatter.string(from: self)
+        Date.shortDisplayFormatter.string(from: self)
     }
-    
+
     /// Filename-safe format: "2026-05-06"
     var filenameDateFormatted: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: self)
+        Date.filenameDateFormatter.string(from: self)
     }
-    
+
     /// Relative time: "5 хв тому"
     var relativeFormatted: String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.locale = Locale(identifier: "uk_UA")
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: self, relativeTo: Date())
+        Date.relativeFormatter.localizedString(for: self, relativeTo: Date())
     }
 }
 

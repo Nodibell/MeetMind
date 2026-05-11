@@ -59,7 +59,8 @@ struct MeetingDetailView: View {
                         Task { await viewModel.regenerateSummary() }
                     },
                     onCopy: { viewModel.copySummary() },
-                    onExport: { viewModel.exportToObsidian() }
+                    onExport: { viewModel.exportToObsidian() },
+                    onCancel: { viewModel.cancelSummaryGeneration() }
                 )
                 .frame(minWidth: 300)
             }
@@ -83,6 +84,12 @@ struct MeetingDetailView: View {
                         .foregroundStyle(Theme.Colors.textPrimary)
                         .textFieldStyle(.plain)
                         .onSubmit {
+                            viewModel.updateMeetingTitle()
+                        }
+                        .onChange(of: viewModel.meetingTitle) { _, _ in
+                            // Title will be persisted on submit or focus loss
+                        }
+                        .onExitCommand {
                             viewModel.updateMeetingTitle()
                         }
                     

@@ -63,8 +63,10 @@ struct ContentView: View {
                 RecordingView(viewModel: vm)
                     .onChange(of: vm.state) { oldState, newState in
                         if case .complete = newState {
-                            // After recording completes, show the meeting detail
-                            // The meeting was already saved to SwiftData
+                            if let meetingID = vm.completedMeetingID {
+                                selectedMeetingID = meetingID
+                                isShowingRecording = false
+                            }
                         }
                     }
             } else {
@@ -153,7 +155,7 @@ struct ContentView: View {
         .background(Theme.Colors.backgroundPrimary)
     }
     
-    private func featureRow(icon: String, title: String, subtitle: String) -> some View {
+    private func featureRow(icon: String, title: LocalizedStringKey, subtitle: LocalizedStringKey) -> some View {
         HStack(spacing: Theme.Spacing.md) {
             Image(systemName: icon)
                 .font(.system(size: 16))

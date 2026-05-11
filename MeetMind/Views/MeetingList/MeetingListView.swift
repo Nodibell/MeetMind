@@ -16,6 +16,8 @@ struct MeetingListView: View {
     @Binding var selectedMeetingID: UUID?
     @Bindable var viewModel: MeetingListViewModel
     var onNewRecording: () -> Void
+
+    @State private var meetingToDelete: Meeting?
     
     var body: some View {
         VStack(spacing: 0) {
@@ -52,17 +54,13 @@ struct MeetingListView: View {
                             .tag(meeting.id)
                             .contextMenu {
                                 Button("Видалити", role: .destructive) {
-                                    viewModel.deleteMeeting(meeting)
-                                    if selectedMeetingID == meeting.id {
-                                        selectedMeetingID = nil
-                                    }
+                                    meetingToDelete = meeting
                                 }
                             }
                     }
                     .onDelete { offsets in
                         for offset in offsets {
-                            let meeting = filteredMeetings[offset]
-                            viewModel.deleteMeeting(meeting)
+                            meetingToDelete = filteredMeetings[offset]
                         }
                     }
                 }
@@ -74,6 +72,23 @@ struct MeetingListView: View {
         .searchable(text: $viewModel.searchText, prompt: "Пошук нарад...")
         .onAppear {
             viewModel.setModelContext(modelContext)
+        }
+        .alert("Видалити нараду?", isPresented: Binding(
+            get: { meetingToDelete != nil },
+            set: { if !$0 { meetingToDelete = nil } }
+        )) {
+            Button("Скасувати", role: .cancel) { meetingToDelete = nil }
+            Button("Видалити", role: .destructive) {
+                if let m = meetingToDelete {
+                    if selectedMeetingID == m.id { selectedMeetingID = nil }
+                    viewModel.deleteMeeting(m)
+                    meetingToDelete = nil
+                }
+            }
+        } message: {
+            if let m = meetingToDelete {
+                Text("Нарада «\(m.title)» буде видалена разом з аудіозаписом і транскриптом. Цю дію не можна скасувати.")
+            }
         }
     }
     

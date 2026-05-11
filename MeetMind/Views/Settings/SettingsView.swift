@@ -10,34 +10,34 @@ import SwiftUI
 /// Application preferences window with tabs
 struct SettingsView: View {
     @Bindable var viewModel: SettingsViewModel
-    
+
     var body: some View {
         TabView {
             Tab("Загальне", systemImage: "gear") {
                 generalTab
             }
-            
+
             Tab("Аудіо", systemImage: "mic.fill") {
                 audioTab
             }
-            
+
             Tab("AI / Ollama", systemImage: "brain.head.profile") {
                 ollamaTab
             }
-            
+
             Tab("Obsidian", systemImage: "doc.text") {
                 obsidianTab
             }
-            
+
             Tab("Файли", systemImage: "folder") {
                 filesTab
             }
         }
         .frame(width: 550, height: 400)
     }
-    
+
     // MARK: - General Tab
-    
+
     private var generalTab: some View {
         Form {
             Section("Мова") {
@@ -49,23 +49,23 @@ struct SettingsView: View {
                         Text(lang.name).tag(lang.code)
                     }
                 }
-                
+
                 Text("Мова використовується для транскрипції та аналізу")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            
+
             Section("Модель Whisper") {
                 TextField("Live (швидка)", text: Binding(
                     get: { viewModel.settings.whisperModelLive },
                     set: { viewModel.settings.whisperModelLive = $0 }
                 ))
-                
+
                 TextField("Post-processing (якісна)", text: Binding(
                     get: { viewModel.settings.whisperModelPost },
                     set: { viewModel.settings.whisperModelPost = $0 }
                 ))
-                
+
                 Text("large-v3-turbo для live, large-v3 для якісної транскрипції")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -74,9 +74,9 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .padding()
     }
-    
+
     // MARK: - Audio Tab
-    
+
     private var audioTab: some View {
         Form {
             Section("Пристрій введення") {
@@ -92,22 +92,44 @@ struct SettingsView: View {
                         Text(device.name).tag(device.id)
                     }
                 }
-                
+
                 Button("Оновити список пристроїв") {
                     viewModel.refreshAudioDevices()
                 }
-                
-                Text("Для захоплення системного аудіо використовуйте BlackHole або подібний віртуальний пристрій")
+
+            }
+
+            Section("Системне аудіо") {
+                Picker("Джерело", selection: Binding(
+                    get: { viewModel.settings.preferredSystemAudioSourceID ?? "" },
+                    set: { newID in
+                        viewModel.settings.preferredSystemAudioSourceID = newID.isEmpty ? nil : newID
+                    }
+                )) {
+                    Text("Авто").tag("")
+                    ForEach(viewModel.availableSystemAudioSources) { source in
+                        Text("\(source.title) - \(source.subtitle)").tag(source.id)
+                    }
+                }
+
+                Button("Оновити список джерел") {
+                    viewModel.refreshSystemAudioSources()
+                }
+
+                Text("Для режимів Система та Мікс можна вибрати весь екран або конкретне вікно")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
         .padding()
+        .task {
+            viewModel.refreshSystemAudioSources()
+        }
     }
-    
+
     // MARK: - Ollama Tab
-    
+
     private var ollamaTab: some View {
         Form {
             Section("Підключення") {
@@ -115,19 +137,19 @@ struct SettingsView: View {
                     get: { viewModel.settings.ollamaEndpoint },
                     set: { viewModel.settings.ollamaEndpoint = $0 }
                 ))
-                
+
                 HStack {
                     statusIndicator
-                    
+
                     Spacer()
-                    
+
                     Button(viewModel.isCheckingOllama ? "Перевірка..." : "Перевірити з'єднання") {
                         Task { await viewModel.checkOllamaConnection() }
                     }
                     .disabled(viewModel.isCheckingOllama)
                 }
             }
-            
+
             Section("Модель") {
                 if viewModel.availableModels.isEmpty {
                     TextField("Модель", text: Binding(
@@ -144,12 +166,12 @@ struct SettingsView: View {
                         }
                     }
                 }
-                
+
                 Text("Рекомендовані: gemma3:12b, qwen2.5:14b (підтримують українську)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            
+
             if let error = viewModel.ollamaError {
                 Section {
                     Label(error, systemImage: "exclamationmark.triangle")
@@ -164,7 +186,7 @@ struct SettingsView: View {
             await viewModel.checkOllamaConnection()
         }
     }
-    
+
     @ViewBuilder
     private var statusIndicator: some View {
         switch viewModel.ollamaStatus {
@@ -188,9 +210,9 @@ struct SettingsView: View {
                 .font(.caption)
         }
     }
-    
+
     // MARK: - Obsidian Tab
-    
+
     private var obsidianTab: some View {
         Form {
             Section("Obsidian Vault") {
@@ -206,19 +228,19 @@ struct SettingsView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    
+
                     Spacer()
-                    
+
                     Button("Обрати папку") {
                         viewModel.pickObsidianVault()
                     }
                 }
-                
+
                 Toggle("Автоматичний експорт після завершення", isOn: Binding(
                     get: { viewModel.settings.autoExportToObsidian },
                     set: { viewModel.settings.autoExportToObsidian = $0 }
                 ))
-                
+
                 Text("Нотатки зберігаються в {Vault}/Meetings/")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -227,9 +249,9 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .padding()
     }
-    
+
     // MARK: - Files Tab
-    
+
     private var filesTab: some View {
         Form {
             Section("Автоматична обробка") {
@@ -245,24 +267,24 @@ struct SettingsView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    
+
                     Spacer()
-                    
+
                     Button("Обрати папку") {
                         viewModel.pickWatchFolder()
                     }
                 }
-                
+
                 Toggle("Автоматично обробляти нові файли", isOn: Binding(
                     get: { viewModel.settings.autoProcessWatchFolder },
                     set: { viewModel.settings.autoProcessWatchFolder = $0 }
                 ))
-                
+
                 Text("Підтримувані формати: WAV, MP3, M4A, FLAC, AAC")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            
+
             Section("Сховище") {
                 HStack {
                     Text("Записи")
@@ -274,7 +296,7 @@ struct SettingsView: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
-                
+
                 HStack {
                     Text("Транскрипти")
                         .font(.caption)

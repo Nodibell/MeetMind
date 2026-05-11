@@ -17,6 +17,9 @@ struct SummaryPanelView: View {
     var onExport: (() -> Void)?
     
     @State private var isHoveringRegenerate = false
+    @State private var didCopy = false
+
+    var onCancel: (() -> Void)? = nil
     
     var body: some View {
         VStack(spacing: 0) {
@@ -37,15 +40,24 @@ struct SummaryPanelView: View {
                 // Action buttons
                 HStack(spacing: Theme.Spacing.sm) {
                     if let onCopy, !displayText.isEmpty {
-                        Button(action: onCopy) {
-                            Image(systemName: "doc.on.doc")
+                        Button(action: {
+                            onCopy()
+                            withAnimation(Theme.Animation.fast) { didCopy = true }
+                            Task {
+                                try? await Task.sleep(for: .seconds(1.5))
+                                await MainActor.run {
+                                    withAnimation(Theme.Animation.fast) { self.didCopy = false }
+                                }
+                            }
+                        }) {
+                            Image(systemName: didCopy ? "checkmark" : "doc.on.doc")
                                 .font(.system(size: 12))
-                                .foregroundStyle(Theme.Colors.textTertiary)
+                                .foregroundStyle(didCopy ? Theme.Colors.success : Theme.Colors.textTertiary)
                         }
                         .buttonStyle(.plain)
-                        .help("Копіювати резюме")
+                        .help("Copy summary")
                     }
-                    
+
                     if let onExport {
                         Button(action: onExport) {
                             Image(systemName: "square.and.arrow.up")
@@ -55,8 +67,19 @@ struct SummaryPanelView: View {
                         .buttonStyle(.plain)
                         .help("Експорт в Obsidian")
                     }
-                    
-                    if let onRegenerate {
+
+                    if isGenerating, let onCancel {
+                        Button(action: onCancel) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 10))
+                                Text("Скасувати")
+                                    .font(Theme.Typography.footnote)
+                            }
+                            .foregroundStyle(Theme.Colors.error)
+                        }
+                        .buttonStyle(.plain)
+                    } else if let onRegenerate {
                         Button(action: onRegenerate) {
                             HStack(spacing: 4) {
                                 Image(systemName: "arrow.clockwise")

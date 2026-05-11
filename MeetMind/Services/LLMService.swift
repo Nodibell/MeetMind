@@ -20,6 +20,8 @@ actor LLMService {
     }
     
     private(set) var state: ServiceState = .idle
+    private var lastHealthCheckDate: Date?
+    private let healthCacheDuration: TimeInterval = 60 // seconds
     
     // MARK: - Callbacks
     var onStateChanged: (@Sendable (ServiceState) -> Void)?
@@ -76,6 +78,13 @@ actor LLMService {
     
     /// Check if Ollama is running and list available models
     func checkHealth() async -> Bool {
+        // Return cached result if still fresh
+        if let lastCheck = lastHealthCheckDate,
+           Date().timeIntervalSince(lastCheck) < healthCacheDuration,
+           case .available = state {
+            return true
+        }
+
         updateState(.checking)
         
         let endpoint = AppSettings.shared.ollamaEndpoint
@@ -96,7 +105,8 @@ actor LLMService {
             
             let tagsResponse = try JSONDecoder().decode(TagsResponse.self, from: data)
             let modelNames = tagsResponse.models.map(\.name)
-            
+
+            lastHealthCheckDate = Date()
             updateState(.available(models: modelNames))
             return true
         } catch let error as URLError where error.code == .cannotConnectToHost {

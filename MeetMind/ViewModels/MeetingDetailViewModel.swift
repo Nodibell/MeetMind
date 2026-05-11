@@ -29,6 +29,7 @@ final class MeetingDetailViewModel {
     // MARK: - Services
     private let llmService: LLMService
     private var modelContext: ModelContext?
+    private var summaryTask: Task<Void, Never>?
     
     // MARK: - Computed
     
@@ -99,11 +100,11 @@ final class MeetingDetailViewModel {
             errorMessage = "Немає транскрипту для аналізу"
             return
         }
-        
+
         isRegeneratingSummary = true
         streamingSummary = ""
         errorMessage = nil
-        
+
         // Setup streaming
         await llmService.setOnTokenReceived { [weak self] token in
             guard let self else { return }
@@ -111,26 +112,37 @@ final class MeetingDetailViewModel {
                 self.streamingSummary += token
             }
         }
-        
-        do {
-            let newSummary = try await llmService.generateSummary(transcript: transcriptText)
-            
-            await MainActor.run {
-                self.summary = newSummary
-                self.streamingSummary = newSummary
-                self.isRegeneratingSummary = false
-            }
-            
-            // Save updated summary
-            if let path = meeting.summaryPath {
-                try newSummary.write(toFile: path, atomically: true, encoding: .utf8)
-            }
-        } catch {
-            await MainActor.run {
-                self.errorMessage = error.localizedDescription
-                self.isRegeneratingSummary = false
+
+        summaryTask = Task {
+            do {
+                let newSummary = try await llmService.generateSummary(transcript: transcriptText)
+
+                await MainActor.run {
+                    self.summary = newSummary
+                    self.streamingSummary = newSummary
+                    self.isRegeneratingSummary = false
+                }
+
+                // Save updated summary
+                if let path = meeting.summaryPath {
+                    try? newSummary.write(toFile: path, atomically: true, encoding: .utf8)
+                }
+            } catch {
+                await MainActor.run {
+                    if !Task.isCancelled {
+                        self.errorMessage = error.localizedDescription
+                    }
+                    self.isRegeneratingSummary = false
+                }
             }
         }
+    }
+
+    func cancelSummaryGeneration() {
+        summaryTask?.cancel()
+        summaryTask = nil
+        isRegeneratingSummary = false
+        streamingSummary = summary // restore last saved
     }
     
     // MARK: - Export
@@ -181,8 +193,15 @@ final class MeetingDetailViewModel {
     }
     
     func updateMeetingTitle() {
-        meeting.title = meetingTitle
-        AppLogger.info("Назву наради змінено на: \(meetingTitle)")
+        let trimmed = meetingTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            meetingTitle = meeting.title
+            return
+        }
+        meeting.title = trimmed
+        meetingTitle = trimmed
+        try? modelContext?.save()
+        AppLogger.info("Назву наради змінено на: \(trimmed)")
     }
     
     // MARK: - Transcript Actions

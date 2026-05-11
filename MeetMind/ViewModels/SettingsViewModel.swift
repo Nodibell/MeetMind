@@ -11,41 +11,45 @@ import AppKit
 /// Manages application settings and service configuration
 @Observable
 final class SettingsViewModel {
-    
+
     // MARK: - State
     var ollamaStatus: OllamaStatus = .unknown
     var availableModels: [String] = []
     var isCheckingOllama = false
     var ollamaError: String?
-    
+
+    // System audio sources
+    var availableSystemAudioSources: [AudioManager.SystemAudioSourceInfo] = []
+
+
     // Settings (bound to AppSettings)
     var settings = AppSettings.shared
-    
+
     enum OllamaStatus: Equatable {
         case unknown
         case checking
         case connected
         case disconnected(String)
     }
-    
+
     private let llmService: LLMService
     let audioManager: AudioManager
-    
+
     init(llmService: LLMService, audioManager: AudioManager) {
         self.llmService = llmService
         self.audioManager = audioManager
     }
-    
+
     // MARK: - Ollama Health Check
-    
+
     func checkOllamaConnection() async {
         isCheckingOllama = true
         ollamaStatus = .checking
         ollamaError = nil
-        
+
         let isHealthy = await llmService.checkHealth()
         let state = await llmService.state
-        
+
         await MainActor.run {
             if isHealthy {
                 ollamaStatus = .connected
@@ -63,9 +67,9 @@ final class SettingsViewModel {
             isCheckingOllama = false
         }
     }
-    
+
     // MARK: - Obsidian Vault Picker
-    
+
     func pickObsidianVault() {
         let panel = NSOpenPanel()
         panel.title = "Оберіть папку Obsidian Vault"
@@ -73,14 +77,14 @@ final class SettingsViewModel {
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
         panel.allowsMultipleSelection = false
-        
+
         if panel.runModal() == .OK, let url = panel.url {
             settings.obsidianVaultPath = url
         }
     }
-    
+
     // MARK: - Watch Folder Picker
-    
+
     func pickWatchFolder() {
         let panel = NSOpenPanel()
         panel.title = "Оберіть папку для автоматичної обробки"
@@ -88,15 +92,28 @@ final class SettingsViewModel {
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
         panel.allowsMultipleSelection = false
-        
+
         if panel.runModal() == .OK, let url = panel.url {
             settings.watchFolderPath = url
         }
     }
-    
+
     // MARK: - Audio Devices
-    
+
     func refreshAudioDevices() {
         audioManager.refreshDevices()
+    }
+
+    func refreshSystemAudioSources() {
+        Task {
+            do {
+                let sources = try await audioManager.getAvailableSystemAudioSources()
+                await MainActor.run {
+                    self.availableSystemAudioSources = sources
+                }
+            } catch {
+                AppLogger.error("Помилка отримання списку джерел системного аудіо: \(error)")
+            }
+        }
     }
 }

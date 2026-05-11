@@ -93,28 +93,35 @@ actor FileProcessingService {
     }
     
     private func processFileIfNew(_ fileURL: URL) async {
-        // Check for duplicates via hash
-        guard let data = try? Data(contentsOf: fileURL) else { return }
-        let hash = data.sha256Hash
-        
-        guard !processedFiles.contains(hash) else { return }
-        
+        // Lightweight file identity: path + size + creation date (avoids loading entire file into RAM)
+        guard let identity = fileIdentity(for: fileURL) else { return }
+
+        guard !processedFiles.contains(identity) else { return }
+
         do {
             // Transcribe
             let transcript = try await transcriptionService.transcribeFile(at: fileURL)
-            
+
             // Summarize
             let summary = try await llmService.generateSummary(transcript: transcript.fullText)
-            
+
             // Mark as processed
-            processedFiles.insert(hash)
+            processedFiles.insert(identity)
             saveManifest()
-            
+
             // Notify
             onFileProcessed?(fileURL.lastPathComponent, transcript, summary)
         } catch {
             onError?(fileURL.lastPathComponent, error)
         }
+    }
+
+    /// Returns a lightweight unique identifier for a file using its metadata (no file reads)
+    private func fileIdentity(for url: URL) -> String? {
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let size = attrs[.size] as? Int,
+              let created = attrs[.creationDate] as? Date else { return nil }
+        return "\(url.path)|\(size)|\(Int(created.timeIntervalSince1970))"
     }
     
     // MARK: - Process Single File
@@ -122,13 +129,13 @@ actor FileProcessingService {
     func processFile(at url: URL) async throws -> (MeetingTranscriptDocument, String) {
         let transcript = try await transcriptionService.transcribeFile(at: url)
         let summary = try await llmService.generateSummary(transcript: transcript.fullText)
-        
-        // Mark as processed
-        if let data = try? Data(contentsOf: url) {
-            processedFiles.insert(data.sha256Hash)
+
+        // Mark as processed using lightweight identity
+        if let identity = fileIdentity(for: url) {
+            processedFiles.insert(identity)
             saveManifest()
         }
-        
+
         return (transcript, summary)
     }
     

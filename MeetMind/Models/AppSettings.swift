@@ -12,11 +12,13 @@ import SwiftUI
 @Observable
 final class AppSettings: @unchecked Sendable {
     nonisolated static let shared = AppSettings()
-    
+
     // MARK: - Keys
     private enum Keys {
         nonisolated static let obsidianVaultPath = "obsidianVaultPath"
         nonisolated static let preferredInputDevice = "preferredInputDevice"
+        nonisolated static let preferredDisplayID = "preferredDisplayID"
+        nonisolated static let preferredSystemAudioSourceID = "preferredSystemAudioSourceID"
         nonisolated static let defaultLanguage = "defaultLanguage"
         nonisolated static let ollamaModel = "ollamaModel"
         nonisolated static let ollamaEndpoint = "ollamaEndpoint"
@@ -27,7 +29,7 @@ final class AppSettings: @unchecked Sendable {
         nonisolated static let whisperModelPost = "whisperModelPost"
         nonisolated static let lastUsedTitle = "lastUsedTitle"
     }
-    
+
     // MARK: - Obsidian
     nonisolated var obsidianVaultPath: URL? {
         get {
@@ -60,35 +62,69 @@ final class AppSettings: @unchecked Sendable {
             }
         }
     }
-    
+
     nonisolated var autoExportToObsidian: Bool {
         get { UserDefaults.standard.bool(forKey: Keys.autoExportToObsidian) }
         set { UserDefaults.standard.set(newValue, forKey: Keys.autoExportToObsidian) }
     }
-    
+
     // MARK: - Audio
     nonisolated var preferredInputDevice: String? {
         get { UserDefaults.standard.string(forKey: Keys.preferredInputDevice) }
         set { UserDefaults.standard.set(newValue, forKey: Keys.preferredInputDevice) }
     }
-    
+
+    nonisolated var preferredDisplayID: UInt32? {
+        get {
+            let value = UserDefaults.standard.object(forKey: Keys.preferredDisplayID) as? UInt32
+            return value
+        }
+        set {
+            if let newValue = newValue {
+                UserDefaults.standard.set(newValue, forKey: Keys.preferredDisplayID)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Keys.preferredDisplayID)
+            }
+        }
+    }
+
+    nonisolated var preferredSystemAudioSourceID: String? {
+        get {
+            if let sourceID = UserDefaults.standard.string(forKey: Keys.preferredSystemAudioSourceID) {
+                return sourceID
+            }
+            if let legacyDisplayID = preferredDisplayID {
+                return "display:\(legacyDisplayID)"
+            }
+            return nil
+        }
+        set {
+            if let newValue {
+                UserDefaults.standard.set(newValue, forKey: Keys.preferredSystemAudioSourceID)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Keys.preferredSystemAudioSourceID)
+                UserDefaults.standard.removeObject(forKey: Keys.preferredDisplayID)
+            }
+        }
+    }
+
     // MARK: - Language
     nonisolated var defaultLanguage: String {
         get { UserDefaults.standard.string(forKey: Keys.defaultLanguage) ?? Constants.defaultLanguage }
         set { UserDefaults.standard.set(newValue, forKey: Keys.defaultLanguage) }
     }
-    
+
     // MARK: - Ollama
     nonisolated var ollamaModel: String {
         get { UserDefaults.standard.string(forKey: Keys.ollamaModel) ?? Constants.defaultOllamaModel }
         set { UserDefaults.standard.set(newValue, forKey: Keys.ollamaModel) }
     }
-    
+
     nonisolated var ollamaEndpoint: String {
         get { UserDefaults.standard.string(forKey: Keys.ollamaEndpoint) ?? Constants.defaultOllamaEndpoint }
         set { UserDefaults.standard.set(newValue, forKey: Keys.ollamaEndpoint) }
     }
-    
+
     // MARK: - Whisper Models
     nonisolated var whisperModelLive: String {
         get {
@@ -98,7 +134,7 @@ final class AppSettings: @unchecked Sendable {
         }
         set { UserDefaults.standard.set(newValue, forKey: Keys.whisperModelLive) }
     }
-    
+
     nonisolated var whisperModelPost: String {
         get {
             let value = UserDefaults.standard.string(forKey: Keys.whisperModelPost) ?? Constants.postProcessingModel
@@ -108,7 +144,7 @@ final class AppSettings: @unchecked Sendable {
         }
         set { UserDefaults.standard.set(newValue, forKey: Keys.whisperModelPost) }
     }
-    
+
     // MARK: - File Processing
     nonisolated var watchFolderPath: URL? {
         get {
@@ -135,12 +171,12 @@ final class AppSettings: @unchecked Sendable {
             } catch { }
         }
     }
-    
+
     nonisolated var autoProcessWatchFolder: Bool {
         get { UserDefaults.standard.bool(forKey: Keys.autoProcessWatchFolder) }
         set { UserDefaults.standard.set(newValue, forKey: Keys.autoProcessWatchFolder) }
     }
-    
+
     // MARK: - Supported Languages
     nonisolated static let supportedLanguages: [(code: String, name: String)] = [
         ("uk", "Українська"),
