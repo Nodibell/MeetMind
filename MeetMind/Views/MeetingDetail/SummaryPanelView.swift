@@ -105,6 +105,7 @@ struct SummaryPanelView: View {
                         .onHover { isHoveringRegenerate = $0 }
                     }
                 }
+                .fixedSize(horizontal: true, vertical: false)
             }
             .padding(.horizontal, Theme.Spacing.lg)
             .padding(.vertical, Theme.Spacing.md)
