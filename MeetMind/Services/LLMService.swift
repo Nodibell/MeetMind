@@ -377,7 +377,7 @@ actor LLMService {
     private static func buildSystemPrompt(targetLanguage: String?) -> String {
         let languageInstruction: String
         if let targetLanguage, targetLanguage != "auto" {
-            languageInstruction = "Відповідай мовою з кодом '\(targetLanguage)' (наприклад: 'uk' - українська, 'en' - англійська). Це ОДНОЗНАЧНА ВИМОГА."
+            languageInstruction = "Важливо: уся твоя відповідь має бути написана виключно мовою з ISO-кодом '\(targetLanguage)'. Не пиши жодних вступних фраз чи підтверджень про мову, одразу починай резюме."
         } else {
             languageInstruction = "Відповідай ТІЄЮ Ж МОВОЮ, якою написано більшу частину транскрипту (за замовчуванням — українською)."
         }
