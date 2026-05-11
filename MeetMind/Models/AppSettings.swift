@@ -6,181 +6,181 @@
 //
 
 import Foundation
-import SwiftUI
+import AppKit
 
-/// Application settings backed by UserDefaults
+/// Application settings backed by UserDefaults.
+///
+/// Uses `@Observable` **stored properties** (not computed properties) so that
+/// SwiftUI views properly re-render when any setting changes.
+/// Each property syncs to UserDefaults via `didSet`.
 @Observable
 final class AppSettings: @unchecked Sendable {
     nonisolated static let shared = AppSettings()
 
-    // MARK: - Keys
+    // MARK: - UserDefaults Keys
+
     private enum Keys {
-        nonisolated static let obsidianVaultPath = "obsidianVaultPath"
-        nonisolated static let preferredInputDevice = "preferredInputDevice"
-        nonisolated static let preferredDisplayID = "preferredDisplayID"
-        nonisolated static let preferredSystemAudioSourceID = "preferredSystemAudioSourceID"
-        nonisolated static let defaultLanguage = "defaultLanguage"
-        nonisolated static let ollamaModel = "ollamaModel"
-        nonisolated static let ollamaEndpoint = "ollamaEndpoint"
-        nonisolated static let autoExportToObsidian = "autoExportToObsidian"
-        nonisolated static let watchFolderPath = "watchFolderPath"
-        nonisolated static let autoProcessWatchFolder = "autoProcessWatchFolder"
-        nonisolated static let whisperModelLive = "whisperModelLive"
-        nonisolated static let whisperModelPost = "whisperModelPost"
-        nonisolated static let lastUsedTitle = "lastUsedTitle"
+        static let obsidianVaultPath        = "obsidianVaultPath"
+        static let autoExportToObsidian     = "autoExportToObsidian"
+        static let preferredInputDevice     = "preferredInputDevice"
+        static let preferredDisplayID       = "preferredDisplayID"       // legacy
+        static let preferredSystemAudioSourceID = "preferredSystemAudioSourceID"
+        static let defaultLanguage          = "defaultLanguage"
+        static let ollamaModel              = "ollamaModel"
+        static let ollamaEndpoint           = "ollamaEndpoint"
+        static let whisperModelLive         = "whisperModelLive"
+        static let whisperModelPost         = "whisperModelPost"
+        static let watchFolderPath          = "watchFolderPath"
+        static let autoProcessWatchFolder   = "autoProcessWatchFolder"
     }
 
     // MARK: - Obsidian
-    nonisolated var obsidianVaultPath: URL? {
-        get {
-            guard let data = UserDefaults.standard.data(forKey: Keys.obsidianVaultPath) else { return nil }
-            var isStale = false
-            do {
-                let url = try URL(resolvingBookmarkData: data, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale)
-                if isStale {
-                    // Update bookmark if stale
-                    Task {
-                        self.obsidianVaultPath = url
-                    }
-                }
-                return url
-            } catch {
-                AppLogger.error("Помилка відновлення доступу до Obsidian", error: error)
-                return nil
-            }
-        }
-        set {
-            guard let url = newValue else {
-                UserDefaults.standard.removeObject(forKey: Keys.obsidianVaultPath)
-                return
-            }
-            do {
-                let data = try url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
-                UserDefaults.standard.set(data, forKey: Keys.obsidianVaultPath)
-            } catch {
-                AppLogger.error("Помилка створення закладки для Obsidian", error: error)
-            }
-        }
+
+    /// Security-scoped URL to the selected Obsidian vault folder.
+    var obsidianVaultPath: URL? {
+        didSet { saveBookmark(obsidianVaultPath, forKey: Keys.obsidianVaultPath) }
     }
 
-    nonisolated var autoExportToObsidian: Bool {
-        get { UserDefaults.standard.bool(forKey: Keys.autoExportToObsidian) }
-        set { UserDefaults.standard.set(newValue, forKey: Keys.autoExportToObsidian) }
+    var autoExportToObsidian: Bool {
+        didSet { UserDefaults.standard.set(autoExportToObsidian, forKey: Keys.autoExportToObsidian) }
     }
 
     // MARK: - Audio
-    nonisolated var preferredInputDevice: String? {
-        get { UserDefaults.standard.string(forKey: Keys.preferredInputDevice) }
-        set { UserDefaults.standard.set(newValue, forKey: Keys.preferredInputDevice) }
+
+    var preferredInputDevice: String? {
+        didSet { UserDefaults.standard.set(preferredInputDevice, forKey: Keys.preferredInputDevice) }
     }
 
-    nonisolated var preferredDisplayID: UInt32? {
-        get {
-            let value = UserDefaults.standard.object(forKey: Keys.preferredDisplayID) as? UInt32
-            return value
-        }
-        set {
-            if let newValue = newValue {
-                UserDefaults.standard.set(newValue, forKey: Keys.preferredDisplayID)
-            } else {
-                UserDefaults.standard.removeObject(forKey: Keys.preferredDisplayID)
-            }
-        }
-    }
-
-    nonisolated var preferredSystemAudioSourceID: String? {
-        get {
-            if let sourceID = UserDefaults.standard.string(forKey: Keys.preferredSystemAudioSourceID) {
-                return sourceID
-            }
-            if let legacyDisplayID = preferredDisplayID {
-                return "display:\(legacyDisplayID)"
-            }
-            return nil
-        }
-        set {
-            if let newValue {
-                UserDefaults.standard.set(newValue, forKey: Keys.preferredSystemAudioSourceID)
+    /// Unified system audio source ID. Format:
+    ///  - `"display:<displayID>"` for screen capture
+    ///  - `"window:<windowID>"` for single-window capture
+    ///  - `nil` for auto (first display)
+    var preferredSystemAudioSourceID: String? {
+        didSet {
+            if let v = preferredSystemAudioSourceID {
+                UserDefaults.standard.set(v, forKey: Keys.preferredSystemAudioSourceID)
             } else {
                 UserDefaults.standard.removeObject(forKey: Keys.preferredSystemAudioSourceID)
-                UserDefaults.standard.removeObject(forKey: Keys.preferredDisplayID)
+                UserDefaults.standard.removeObject(forKey: Keys.preferredDisplayID) // clear legacy
             }
         }
     }
 
     // MARK: - Language
-    nonisolated var defaultLanguage: String {
-        get { UserDefaults.standard.string(forKey: Keys.defaultLanguage) ?? Constants.defaultLanguage }
-        set { UserDefaults.standard.set(newValue, forKey: Keys.defaultLanguage) }
+
+    var defaultLanguage: String {
+        didSet { UserDefaults.standard.set(defaultLanguage, forKey: Keys.defaultLanguage) }
     }
 
     // MARK: - Ollama
-    nonisolated var ollamaModel: String {
-        get { UserDefaults.standard.string(forKey: Keys.ollamaModel) ?? Constants.defaultOllamaModel }
-        set { UserDefaults.standard.set(newValue, forKey: Keys.ollamaModel) }
+
+    var ollamaModel: String {
+        didSet { UserDefaults.standard.set(ollamaModel, forKey: Keys.ollamaModel) }
     }
 
-    nonisolated var ollamaEndpoint: String {
-        get { UserDefaults.standard.string(forKey: Keys.ollamaEndpoint) ?? Constants.defaultOllamaEndpoint }
-        set { UserDefaults.standard.set(newValue, forKey: Keys.ollamaEndpoint) }
+    var ollamaEndpoint: String {
+        didSet { UserDefaults.standard.set(ollamaEndpoint, forKey: Keys.ollamaEndpoint) }
     }
 
     // MARK: - Whisper Models
-    nonisolated var whisperModelLive: String {
-        get {
-            let value = UserDefaults.standard.string(forKey: Keys.whisperModelLive) ?? Constants.liveTranscriptionModel
-            // Fix legacy hyphenated names from previous runs
-            return value.replacingOccurrences(of: "large-v3-turbo", with: "large-v3_turbo")
-        }
-        set { UserDefaults.standard.set(newValue, forKey: Keys.whisperModelLive) }
+
+    var whisperModelLive: String {
+        didSet { UserDefaults.standard.set(whisperModelLive, forKey: Keys.whisperModelLive) }
     }
 
-    nonisolated var whisperModelPost: String {
-        get {
-            let value = UserDefaults.standard.string(forKey: Keys.whisperModelPost) ?? Constants.postProcessingModel
-            // Ensure we use the best available large model
-            if value == "large-v3" || value == "openai_whisper-large-v3" { return value }
-            return Constants.postProcessingModel
-        }
-        set { UserDefaults.standard.set(newValue, forKey: Keys.whisperModelPost) }
+    var whisperModelPost: String {
+        didSet { UserDefaults.standard.set(whisperModelPost, forKey: Keys.whisperModelPost) }
     }
 
     // MARK: - File Processing
-    nonisolated var watchFolderPath: URL? {
-        get {
-            guard let data = UserDefaults.standard.data(forKey: Keys.watchFolderPath) else { return nil }
-            var isStale = false
-            do {
-                let url = try URL(resolvingBookmarkData: data, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale)
-                if isStale {
-                    Task { self.watchFolderPath = url }
-                }
-                return url
-            } catch {
-                return nil
-            }
-        }
-        set {
-            guard let url = newValue else {
-                UserDefaults.standard.removeObject(forKey: Keys.watchFolderPath)
-                return
-            }
-            do {
-                let data = try url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
-                UserDefaults.standard.set(data, forKey: Keys.watchFolderPath)
-            } catch { }
-        }
+
+    var watchFolderPath: URL? {
+        didSet { saveBookmark(watchFolderPath, forKey: Keys.watchFolderPath) }
     }
 
-    nonisolated var autoProcessWatchFolder: Bool {
-        get { UserDefaults.standard.bool(forKey: Keys.autoProcessWatchFolder) }
-        set { UserDefaults.standard.set(newValue, forKey: Keys.autoProcessWatchFolder) }
+    var autoProcessWatchFolder: Bool {
+        didSet { UserDefaults.standard.set(autoProcessWatchFolder, forKey: Keys.autoProcessWatchFolder) }
     }
 
     // MARK: - Supported Languages
+
     nonisolated static let supportedLanguages: [(code: String, name: String)] = [
         ("uk", "Українська"),
         ("en", "English"),
         ("auto", "Авто-визначення"),
     ]
+
+    // MARK: - Init
+
+    private init() {
+        // --- Simple scalar values ---
+        autoExportToObsidian    = UserDefaults.standard.bool(forKey: Keys.autoExportToObsidian)
+        autoProcessWatchFolder  = UserDefaults.standard.bool(forKey: Keys.autoProcessWatchFolder)
+        preferredInputDevice    = UserDefaults.standard.string(forKey: Keys.preferredInputDevice)
+        defaultLanguage         = UserDefaults.standard.string(forKey: Keys.defaultLanguage) ?? Constants.defaultLanguage
+        ollamaModel             = UserDefaults.standard.string(forKey: Keys.ollamaModel) ?? Constants.defaultOllamaModel
+        ollamaEndpoint          = UserDefaults.standard.string(forKey: Keys.ollamaEndpoint) ?? Constants.defaultOllamaEndpoint
+
+        // --- Whisper models (with legacy name migration) ---
+        let liveRaw = UserDefaults.standard.string(forKey: Keys.whisperModelLive) ?? Constants.liveTranscriptionModel
+        whisperModelLive = liveRaw.replacingOccurrences(of: "large-v3-turbo", with: "large-v3_turbo")
+
+        let postRaw = UserDefaults.standard.string(forKey: Keys.whisperModelPost) ?? Constants.postProcessingModel
+        whisperModelPost = (postRaw == "large-v3" || postRaw == "openai_whisper-large-v3")
+            ? postRaw
+            : Constants.postProcessingModel
+
+        // --- System audio source (with legacy display ID migration) ---
+        if let sourceID = UserDefaults.standard.string(forKey: Keys.preferredSystemAudioSourceID) {
+            preferredSystemAudioSourceID = sourceID
+        } else if let legacyID = UserDefaults.standard.object(forKey: Keys.preferredDisplayID) as? UInt32 {
+            preferredSystemAudioSourceID = "display:\(legacyID)"
+        } else {
+            preferredSystemAudioSourceID = nil
+        }
+
+        // --- Security-scoped bookmarks ---
+        obsidianVaultPath = AppSettings.resolveBookmark(forKey: Keys.obsidianVaultPath)
+        watchFolderPath   = AppSettings.resolveBookmark(forKey: Keys.watchFolderPath)
+    }
+
+    // MARK: - Bookmark Helpers
+
+    private func saveBookmark(_ url: URL?, forKey key: String) {
+        guard let url else {
+            UserDefaults.standard.removeObject(forKey: key)
+            return
+        }
+        do {
+            let data = try url.bookmarkData(
+                options: .withSecurityScope,
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
+            UserDefaults.standard.set(data, forKey: key)
+        } catch {
+            AppLogger.error("Failed to save security-scoped bookmark for \(key)", error: error)
+        }
+    }
+
+    private static func resolveBookmark(forKey key: String) -> URL? {
+        guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
+        var isStale = false
+        do {
+            let url = try URL(
+                resolvingBookmarkData: data,
+                options: .withSecurityScope,
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
+            )
+            if isStale {
+                AppLogger.warning("Security-scoped bookmark stale for key: \(key)")
+                // Will be re-saved when property is next written
+            }
+            return url
+        } catch {
+            AppLogger.error("Failed to resolve security-scoped bookmark for \(key)", error: error)
+            return nil
+        }
+    }
 }

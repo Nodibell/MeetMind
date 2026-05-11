@@ -46,44 +46,36 @@ struct MeetMindApp: App {
             .preferredColorScheme(.dark)
             .onAppear {
                 configureAppAppearance()
+                // Initialize SettingsViewModel eagerly so it's ready when Settings opens
+                if settingsViewModel == nil {
+                    settingsViewModel = SettingsViewModel(llmService: llmService, audioManager: audioManager)
+                }
             }
         }
         .modelContainer(sharedModelContainer)
         .windowStyle(.automatic)
         .defaultSize(width: 1100, height: 700)
         .commands {
-            // Custom menu commands
             CommandGroup(after: .newItem) {
-                Button("Новий запис") {
-                    // Handled via notifications or through the main window
-                }
-                .keyboardShortcut("r", modifiers: [.command])
+                Button("Новий запис") { }
+                    .keyboardShortcut("r", modifiers: [.command])
             }
         }
-        
+
         // Settings Window
         Settings {
-            SettingsView(viewModel: resolvedSettingsViewModel)
+            if let vm = settingsViewModel {
+                SettingsView(viewModel: vm)
+            } else {
+                ProgressView("Ініціалізація...")
+                    .frame(width: 550, height: 420)
+            }
         }
     }
-    
-    // MARK: - Resolved Settings ViewModel
-    
-    private var resolvedSettingsViewModel: SettingsViewModel {
-        if let existing = settingsViewModel {
-            return existing
-        }
-        let vm = SettingsViewModel(llmService: llmService, audioManager: audioManager)
-        DispatchQueue.main.async {
-            self.settingsViewModel = vm
-        }
-        return vm
-    }
-    
+
     // MARK: - Appearance
-    
+
     private func configureAppAppearance() {
-        // Force dark mode appearance
         NSApp.appearance = NSAppearance(named: .darkAqua)
     }
 }

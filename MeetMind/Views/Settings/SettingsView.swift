@@ -33,7 +33,7 @@ struct SettingsView: View {
                 filesTab
             }
         }
-        .frame(width: 550, height: 400)
+        .frame(width: 550, height: 420)
     }
 
     // MARK: - General Tab
@@ -41,10 +41,7 @@ struct SettingsView: View {
     private var generalTab: some View {
         Form {
             Section("Мова") {
-                Picker("Мова за замовчуванням", selection: Binding(
-                    get: { viewModel.settings.defaultLanguage },
-                    set: { viewModel.settings.defaultLanguage = $0 }
-                )) {
+                Picker("Мова за замовчуванням", selection: $viewModel.settings.defaultLanguage) {
                     ForEach(AppSettings.supportedLanguages, id: \.code) { lang in
                         Text(lang.name).tag(lang.code)
                     }
@@ -56,15 +53,8 @@ struct SettingsView: View {
             }
 
             Section("Модель Whisper") {
-                TextField("Live (швидка)", text: Binding(
-                    get: { viewModel.settings.whisperModelLive },
-                    set: { viewModel.settings.whisperModelLive = $0 }
-                ))
-
-                TextField("Post-processing (якісна)", text: Binding(
-                    get: { viewModel.settings.whisperModelPost },
-                    set: { viewModel.settings.whisperModelPost = $0 }
-                ))
+                TextField("Live (швидка)", text: $viewModel.settings.whisperModelLive)
+                TextField("Post-processing (якісна)", text: $viewModel.settings.whisperModelPost)
 
                 Text("large-v3-turbo для live, large-v3 для якісної транскрипції")
                     .font(.caption)
@@ -96,7 +86,6 @@ struct SettingsView: View {
                 Button("Оновити список пристроїв") {
                     viewModel.refreshAudioDevices()
                 }
-
             }
 
             Section("Системне аудіо") {
@@ -108,7 +97,7 @@ struct SettingsView: View {
                 )) {
                     Text("Авто").tag("")
                     ForEach(viewModel.availableSystemAudioSources) { source in
-                        Text("\(source.title) - \(source.subtitle)").tag(source.id)
+                        Text("\(source.title) — \(source.subtitle)").tag(source.id)
                     }
                 }
 
@@ -133,10 +122,7 @@ struct SettingsView: View {
     private var ollamaTab: some View {
         Form {
             Section("Підключення") {
-                TextField("Endpoint", text: Binding(
-                    get: { viewModel.settings.ollamaEndpoint },
-                    set: { viewModel.settings.ollamaEndpoint = $0 }
-                ))
+                TextField("Endpoint", text: $viewModel.settings.ollamaEndpoint)
 
                 HStack {
                     statusIndicator
@@ -152,15 +138,9 @@ struct SettingsView: View {
 
             Section("Модель") {
                 if viewModel.availableModels.isEmpty {
-                    TextField("Модель", text: Binding(
-                        get: { viewModel.settings.ollamaModel },
-                        set: { viewModel.settings.ollamaModel = $0 }
-                    ))
+                    TextField("Модель", text: $viewModel.settings.ollamaModel)
                 } else {
-                    Picker("Модель", selection: Binding(
-                        get: { viewModel.settings.ollamaModel },
-                        set: { viewModel.settings.ollamaModel = $0 }
-                    )) {
+                    Picker("Модель", selection: $viewModel.settings.ollamaModel) {
                         ForEach(viewModel.availableModels, id: \.self) { model in
                             Text(model).tag(model)
                         }
@@ -236,10 +216,7 @@ struct SettingsView: View {
                     }
                 }
 
-                Toggle("Автоматичний експорт після завершення", isOn: Binding(
-                    get: { viewModel.settings.autoExportToObsidian },
-                    set: { viewModel.settings.autoExportToObsidian = $0 }
-                ))
+                Toggle("Автоматичний експорт після завершення", isOn: $viewModel.settings.autoExportToObsidian)
 
                 Text("Нотатки зберігаються в {Vault}/Meetings/")
                     .font(.caption)
@@ -275,10 +252,7 @@ struct SettingsView: View {
                     }
                 }
 
-                Toggle("Автоматично обробляти нові файли", isOn: Binding(
-                    get: { viewModel.settings.autoProcessWatchFolder },
-                    set: { viewModel.settings.autoProcessWatchFolder = $0 }
-                ))
+                Toggle("Автоматично обробляти нові файли", isOn: $viewModel.settings.autoProcessWatchFolder)
 
                 Text("Підтримувані формати: WAV, MP3, M4A, FLAC, AAC")
                     .font(.caption)
@@ -287,8 +261,7 @@ struct SettingsView: View {
 
             Section("Сховище") {
                 HStack {
-                    Text("Записи")
-                        .font(.caption)
+                    Text("Записи").font(.caption)
                     Spacer()
                     Text(Constants.recordingsDirectory.path)
                         .font(.caption)
@@ -298,8 +271,7 @@ struct SettingsView: View {
                 }
 
                 HStack {
-                    Text("Транскрипти")
-                        .font(.caption)
+                    Text("Транскрипти").font(.caption)
                     Spacer()
                     Text(Constants.transcriptsDirectory.path)
                         .font(.caption)

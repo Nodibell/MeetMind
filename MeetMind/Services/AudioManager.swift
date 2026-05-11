@@ -499,6 +499,7 @@ final class AudioManager: NSObject, @unchecked Sendable {
     private func makeSystemAudioContentFilter(from content: SCShareableContent) throws -> SCContentFilter {
         let preferredID = AppSettings.shared.preferredSystemAudioSourceID
 
+        // Window capture
         if let preferredID,
            preferredID.hasPrefix("window:"),
            let rawID = UInt32(preferredID.replacingOccurrences(of: "window:", with: "")),
@@ -506,19 +507,15 @@ final class AudioManager: NSObject, @unchecked Sendable {
             return SCContentFilter(desktopIndependentWindow: window)
         }
 
-        let preferredDisplayID: UInt32?
+        // Display capture
         if let preferredID,
-           preferredID.hasPrefix("display:") {
-            preferredDisplayID = UInt32(preferredID.replacingOccurrences(of: "display:", with: ""))
-        } else {
-            preferredDisplayID = AppSettings.shared.preferredDisplayID
-        }
-
-        if let preferredDisplayID,
-           let display = content.displays.first(where: { $0.displayID == preferredDisplayID }) {
+           preferredID.hasPrefix("display:"),
+           let rawID = UInt32(preferredID.replacingOccurrences(of: "display:", with: "")),
+           let display = content.displays.first(where: { $0.displayID == rawID }) {
             return SCContentFilter(display: display, excludingWindows: [])
         }
 
+        // Auto — first available display
         guard let display = content.displays.first else {
             throw AudioError.noSystemAudioSource
         }
