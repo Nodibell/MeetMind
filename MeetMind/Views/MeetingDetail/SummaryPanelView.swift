@@ -29,6 +29,7 @@ struct SummaryPanelView: View {
                 Label("AI Резюме", systemImage: "brain.head.profile")
                     .font(Theme.Typography.headline)
                     .foregroundStyle(Theme.Colors.textPrimary)
+                    .fixedSize(horizontal: true, vertical: false)
                 
                 if isGenerating {
                     ProgressView()

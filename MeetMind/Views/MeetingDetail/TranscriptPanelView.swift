@@ -25,6 +25,7 @@ struct TranscriptPanelView: View {
                 Label("Транскрипт", systemImage: "text.quote")
                     .font(Theme.Typography.headline)
                     .foregroundStyle(Theme.Colors.textPrimary)
+                    .fixedSize(horizontal: true, vertical: false)
                 
                 Spacer()
                 
