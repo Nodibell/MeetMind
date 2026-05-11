@@ -401,12 +401,20 @@ final class AudioManager: NSObject, @unchecked Sendable {
     func getAvailableSystemAudioSources() async throws -> [SystemAudioSourceInfo] {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
 
+        // Only windows from regular apps (shown in Dock).
+        // Filters out: CursorUIViewService, AutoFill panels, App Icon Windows, etc.
+        let regularBundleSet = Set(
+            NSWorkspace.shared.runningApplications
+                .filter { $0.activationPolicy == .regular }
+                .compactMap(\.bundleIdentifier)
+        )
+
         let displays = content.displays.enumerated().map { index, display in
             SystemAudioSourceInfo(
                 id: "display:\(display.displayID)",
                 kind: .display,
                 title: "Екран \(index + 1)",
-                subtitle: "\(Int(display.width))x\(Int(display.height))",
+                subtitle: "\(Int(display.width))×\(Int(display.height))",
                 displayID: display.displayID,
                 windowID: nil
             )
@@ -414,16 +422,21 @@ final class AudioManager: NSObject, @unchecked Sendable {
 
         let windows = content.windows
             .filter { window in
-                window.windowLayer == 0 &&
-                window.frame.width >= 40 &&
-                window.frame.height >= 40 &&
-                window.owningApplication?.processID != ProcessInfo.processInfo.processIdentifier
+                guard window.windowLayer == 0,
+                      window.frame.width >= 100,
+                      window.frame.height >= 100,
+                      window.owningApplication?.processID != ProcessInfo.processInfo.processIdentifier
+                else { return false }
+                let bundleID = window.owningApplication?.bundleIdentifier ?? ""
+                return regularBundleSet.contains(bundleID)
             }
-            .prefix(80)
+            .prefix(60)
             .map { window in
                 let appName = window.owningApplication?.applicationName ?? "Unknown"
                 let title = window.title?.trimmingCharacters(in: .whitespacesAndNewlines)
-                let displayTitle = title?.isEmpty == false ? title! : appName
+                let displayTitle = (title?.isEmpty == false && title != appName)
+                    ? "\(appName) — \(title!)"
+                    : appName
                 return SystemAudioSourceInfo(
                     id: "window:\(window.windowID)",
                     kind: .window,
