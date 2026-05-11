@@ -399,7 +399,7 @@ final class AudioManager: NSObject, @unchecked Sendable {
     }
 
     func getAvailableSystemAudioSources() async throws -> [SystemAudioSourceInfo] {
-        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
 
         let displays = content.displays.enumerated().map { index, display in
             SystemAudioSourceInfo(
@@ -415,11 +415,11 @@ final class AudioManager: NSObject, @unchecked Sendable {
         let windows = content.windows
             .filter { window in
                 window.windowLayer == 0 &&
-                window.frame.width >= 80 &&
-                window.frame.height >= 80 &&
+                window.frame.width >= 40 &&
+                window.frame.height >= 40 &&
                 window.owningApplication?.processID != ProcessInfo.processInfo.processIdentifier
             }
-            .prefix(60)
+            .prefix(80)
             .map { window in
                 let appName = window.owningApplication?.applicationName ?? "Unknown"
                 let title = window.title?.trimmingCharacters(in: .whitespacesAndNewlines)

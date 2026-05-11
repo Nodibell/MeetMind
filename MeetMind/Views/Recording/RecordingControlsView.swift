@@ -30,6 +30,11 @@ struct RecordingControlsView: View {
                 .pickerStyle(.segmented)
                 .frame(width: 320)
                 .disabled(viewModel.state == .recording)
+                .onChange(of: viewModel.audioManager.audioSource) { _, newSource in
+                    if newSource == .system || newSource == .mixed {
+                        viewModel.refreshSystemAudioSources()
+                    }
+                }
 
                 // Device, system source & language pickers
                 HStack(spacing: Theme.Spacing.md) {
@@ -170,6 +175,15 @@ struct RecordingControlsView: View {
             }
             .pickerStyle(.menu)
             .frame(maxWidth: 190)
+
+            // Manual refresh button
+            Button(action: { viewModel.refreshSystemAudioSources() }) {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(Theme.Colors.textTertiary)
+            }
+            .buttonStyle(.plain)
+            .help("Оновити список вікон")
         }
         .padding(.horizontal, Theme.Spacing.md)
         .padding(.vertical, Theme.Spacing.xs)
