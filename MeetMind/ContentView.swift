@@ -19,8 +19,9 @@ struct ContentView: View {
     
     // State
     @State private var selectedMeetingID: UUID?
-    @State private var isShowingRecording = true
     @State private var isShowingGlobalSearch = false
+    @State private var isShowingActionItems = false
+    @State private var isShowingRecording = true
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     
     // ViewModels
@@ -39,14 +40,17 @@ struct ContentView: View {
             setupViewModels()
         }
         .onChange(of: selectedMeetingID) { oldID, newID in
-            if newID == .globalSearch {
+            if newID == UUID.globalSearch {
                 isShowingGlobalSearch = true
+                isShowingActionItems = false
                 isShowingRecording = false
-            } else if newID == .actionItems {
-                // Future: Action items view
+            } else if newID == UUID.actionItems {
                 isShowingGlobalSearch = false
+                isShowingActionItems = true
+                isShowingRecording = false
             } else if newID != nil {
                 isShowingGlobalSearch = false
+                isShowingActionItems = false
                 isShowingRecording = false
             }
         }
@@ -72,6 +76,8 @@ struct ContentView: View {
     private var detailContent: some View {
         if isShowingGlobalSearch {
             GlobalSearchView(llmService: llmService)
+        } else if isShowingActionItems {
+            ActionItemsView()
         } else if isShowingRecording && selectedMeetingID == nil {
             // Show recording view
             if let vm = recordingVM {

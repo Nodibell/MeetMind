@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>MeetMind</key>
+	<array>
+		<dict>
+			<key>architectures</key>
+			<array>
+				<string>x86_64</string>
+				<string>arm64</string>
+			</array>
+			<key>buildNumber</key>
+			<string>11</string>
+			<key>certificate</key>
+			<dict>
+				<key>SHA1</key>
+				<string>1F9E32F2F45D627643181561E33B428DA20E519F</string>
+				<key>dateExpires</key>
+				<string>06.05.2027</string>
+				<key>type</key>
+				<string>Apple Development</string>
+			</dict>
+			<key>entitlements</key>
+			<dict>
+				<key>com.apple.security.app-sandbox</key>
+				<true/>
+				<key>com.apple.security.device.audio-input</key>
+				<true/>
+				<key>com.apple.security.files.downloads.read-write</key>
+				<true/>
+				<key>com.apple.security.files.user-selected.read-write</key>
+				<true/>
+				<key>com.apple.security.network.client</key>
+				<true/>
+			</dict>
+			<key>name</key>
+			<string>MeetMind.app</string>
+			<key>team</key>
+			<dict>
+				<key>id</key>
+				<string>72UFS7AJ5R</string>
+				<key>name</key>
+				<string>Oleksii Chumak</string>
+			</dict>
+			<key>versionNumber</key>
+			<string>1.2.2</string>
+		</dict>
+	</array>
+</dict>
+</plist>

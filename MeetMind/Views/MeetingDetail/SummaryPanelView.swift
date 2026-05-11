@@ -65,7 +65,7 @@ struct SummaryPanelView: View {
                         .controlSize(.small)
                         .disabled(isGenerating)
                         
-                        // Action Icons
+                        // Action Buttons with Labels
                         HStack(spacing: Theme.Spacing.md) {
                             if let onCopy, !displayText.isEmpty {
                                 Button(action: {
@@ -78,32 +78,30 @@ struct SummaryPanelView: View {
                                         }
                                     }
                                 }) {
-                                    Image(systemName: didCopy ? "checkmark" : "doc.on.doc")
+                                    Label(didCopy ? "Скопійовано" : "Копіювати", systemImage: didCopy ? "checkmark" : "doc.on.doc")
                                         .foregroundStyle(didCopy ? Theme.Colors.success : Theme.Colors.textTertiary)
                                 }
-                                .help("Копіювати резюме")
                             }
 
                             if let onExport {
                                 Button(action: onExport) {
-                                    Image(systemName: "square.and.arrow.up")
+                                    Label("Obsidian", systemImage: "square.and.arrow.up")
                                         .foregroundStyle(Theme.Colors.textTertiary)
                                 }
-                                .help("Експорт в Obsidian")
                             }
 
                             if let onRegenerate {
                                 Button(action: onRegenerate) {
-                                    Image(systemName: "arrow.clockwise")
+                                    Label("Оновити", systemImage: "arrow.clockwise")
                                         .foregroundStyle(isHoveringRegenerate ? Theme.Colors.accentPrimary : Theme.Colors.textTertiary)
                                 }
                                 .disabled(isGenerating)
                                 .onHover { isHoveringRegenerate = $0 }
-                                .help("Регенерувати")
                             }
                         }
-                        .font(.system(size: 13))
-                        .buttonStyle(.plain)
+                        .font(Theme.Typography.caption)
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
                     }
                 }
                 .fixedSize(horizontal: true, vertical: false)
