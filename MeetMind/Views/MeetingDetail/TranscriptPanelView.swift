@@ -12,6 +12,9 @@ struct TranscriptPanelView: View {
     let segments: [MeetingTranscriptSegment]
     @Binding var searchText: String
     var isLoading: Bool = false
+    var translatedText: String? = nil
+    var isTranslating: Bool = false
+    var onClearTranslation: (() -> Void)? = nil
     
     @State private var highlightedSegmentID: UUID?
     
@@ -50,6 +53,38 @@ struct TranscriptPanelView: View {
             // Content
             if isLoading {
                 loadingState
+            } else if isTranslating {
+                VStack(spacing: Theme.Spacing.md) {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text("Перекладаємо...")
+                        .font(Theme.Typography.body)
+                        .foregroundStyle(Theme.Colors.textSecondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let translatedText = translatedText {
+                ScrollView {
+                    VStack(alignment: .leading) {
+                        HStack {
+                            Label("Переклад", systemImage: "globe")
+                                .font(Theme.Typography.caption)
+                                .foregroundStyle(Theme.Colors.accentPrimary)
+                            Spacer()
+                            Button(action: { onClearTranslation?() }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(Theme.Colors.textTertiary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.bottom, Theme.Spacing.sm)
+                        
+                        Text(translatedText)
+                            .font(Theme.Typography.body)
+                            .foregroundStyle(Theme.Colors.textPrimary)
+                            .textSelection(.enabled)
+                    }
+                    .padding(Theme.Spacing.lg)
+                }
             } else if segments.isEmpty {
                 emptyState
             } else {

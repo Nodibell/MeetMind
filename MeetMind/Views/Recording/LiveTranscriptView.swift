@@ -123,11 +123,19 @@ struct MeetingTranscriptSegmentRow: View {
                 .padding(.vertical, 2)
             
             // Text
-            Text(segment.text)
-                .font(Theme.Typography.body)
-                .foregroundStyle(isLatest ? Theme.Colors.textPrimary : Theme.Colors.textSecondary)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            if isLatest {
+                TypewriterTextView(fullText: segment.text, isStreaming: true, delayMilliseconds: 15)
+                    .font(Theme.Typography.body)
+                    .foregroundStyle(Theme.Colors.textPrimary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                Text(segment.text)
+                    .font(Theme.Typography.body)
+                    .foregroundStyle(Theme.Colors.textSecondary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
         .padding(.vertical, Theme.Spacing.xxs)
         .opacity(isLatest ? 1.0 : 0.85)

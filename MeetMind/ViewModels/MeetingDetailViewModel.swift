@@ -93,6 +93,98 @@ final class MeetingDetailViewModel {
         }
     }
     
+    // MARK: - Chat State
+    var chatMessages: [LLMService.ChatMessage] = []
+    var isChatting: Bool = false
+    var streamingChatResponse: String = ""
+    private var chatTask: Task<Void, Never>?
+    
+    // MARK: - Chat Actions
+    
+    func sendChatMessage(_ message: String) async {
+        guard !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard let transcriptText = transcript?.fullText else { return }
+        
+        await MainActor.run {
+            chatMessages.append(.init(role: "user", content: message))
+            isChatting = true
+            streamingChatResponse = ""
+            errorMessage = nil
+        }
+        
+        chatTask?.cancel()
+        
+        await llmService.setOnTokenReceived { [weak self] token in
+            guard let self else { return }
+            Task { @MainActor in
+                self.streamingChatResponse += token
+            }
+        }
+        
+        chatTask = Task {
+            do {
+                let history = await MainActor.run { self.chatMessages }
+                let response = try await llmService.answerQuestion(
+                    transcript: transcriptText,
+                    question: message,
+                    history: history
+                )
+                
+                await MainActor.run {
+                    self.chatMessages.append(.init(role: "assistant", content: response))
+                    self.streamingChatResponse = ""
+                    self.isChatting = false
+                }
+            } catch {
+                await MainActor.run {
+                    if !Task.isCancelled {
+                        self.errorMessage = "Помилка чату: \(error.localizedDescription)"
+                    }
+                    self.isChatting = false
+                }
+            }
+        }
+    }
+    
+    func cancelChat() {
+        chatTask?.cancel()
+        chatTask = nil
+        isChatting = false
+    }
+
+    // MARK: - Transcript Translation
+    var translatedTranscript: String? = nil
+    var isTranslatingTranscript: Bool = false
+    private var translationTask: Task<Void, Never>?
+    
+    func translateTranscript(to languageName: String) async {
+        guard let transcriptText = transcript?.fullText, !transcriptText.isEmpty else { return }
+        
+        await MainActor.run {
+            isTranslatingTranscript = true
+            errorMessage = nil
+        }
+        
+        translationTask?.cancel()
+        
+        translationTask = Task {
+            do {
+                let translated = try await llmService.translateText(text: transcriptText, to: languageName)
+                await MainActor.run {
+                    self.translatedTranscript = translated
+                    self.isTranslatingTranscript = false
+                }
+            } catch {
+                await MainActor.run {
+                    if !Task.isCancelled {
+                        self.errorMessage = "Помилка перекладу: \(error.localizedDescription)"
+                    }
+                    self.isTranslatingTranscript = false
+                }
+            }
+        }
+    }
+
     // MARK: - Regenerate Summary
     
     func regenerateSummary() async {
@@ -115,7 +207,8 @@ final class MeetingDetailViewModel {
 
         summaryTask = Task {
             do {
-                let newSummary = try await llmService.generateSummary(transcript: transcriptText)
+                let targetLanguage = AppSettings.shared.summaryLanguage
+                let newSummary = try await llmService.generateSummary(transcript: transcriptText, targetLanguage: targetLanguage)
 
                 await MainActor.run {
                     self.summary = newSummary

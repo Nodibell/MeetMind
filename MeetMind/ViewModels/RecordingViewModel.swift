@@ -322,6 +322,20 @@ final class RecordingViewModel {
                 return
             }
 
+            // Generate title
+            do {
+                let newTitle = try await llmService.generateTitle(transcript: transcriptText)
+                if !newTitle.isEmpty {
+                    await MainActor.run {
+                        self.meetingTitle = newTitle
+                        self.currentMeeting?.title = newTitle
+                        try? self.modelContext?.save()
+                    }
+                }
+            } catch {
+                AppLogger.warning("Не вдалося згенерувати назву: \(error.localizedDescription)")
+            }
+
             // Setup streaming callback
             await llmService.setOnTokenReceived { [weak self] token in
                 guard let self else { return }
@@ -330,7 +344,8 @@ final class RecordingViewModel {
                 }
             }
 
-            let summaryResult = try await llmService.generateSummary(transcript: transcriptText)
+            let targetLanguage = AppSettings.shared.summaryLanguage
+            let summaryResult = try await llmService.generateSummary(transcript: transcriptText, targetLanguage: targetLanguage)
 
             await MainActor.run {
                 self.summary = summaryResult

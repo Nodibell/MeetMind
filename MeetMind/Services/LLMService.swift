@@ -49,9 +49,14 @@ actor LLMService {
         }
     }
     
-    private struct ChatMessage: Encodable {
+    struct ChatMessage: Codable, Identifiable, Equatable {
+        var id = UUID()
         let role: String
         let content: String
+        
+        enum CodingKeys: String, CodingKey {
+            case role, content
+        }
     }
     
     private struct ChatStreamResponse: Decodable {
@@ -121,8 +126,8 @@ actor LLMService {
     // MARK: - Summary Generation
     
     /// Generate meeting summary from transcript text
-    func generateSummary(transcript: String) async throws -> String {
-        AppLogger.info("Запит на генерацію резюме (довжина транскрипту: \(transcript.count) симв.)")
+    func generateSummary(transcript: String, targetLanguage: String? = nil) async throws -> String {
+        AppLogger.info("Запит на генерацію резюме (довжина: \(transcript.count) симв., мова: \(targetLanguage ?? "auto"))")
         let model = AppSettings.shared.ollamaModel
         let endpoint = AppSettings.shared.ollamaEndpoint
         
@@ -141,16 +146,16 @@ actor LLMService {
         
         // Handle long transcripts with chunking
         if transcript.count > Constants.maxTokensPerChunk * 4 {
-            return try await generateChunkedSummary(transcript: transcript, model: model, endpoint: endpoint)
+            return try await generateChunkedSummary(transcript: transcript, model: model, endpoint: endpoint, targetLanguage: targetLanguage)
         }
         
-        return try await generateSingleSummary(transcript: transcript, model: model, endpoint: endpoint)
+        return try await generateSingleSummary(transcript: transcript, model: model, endpoint: endpoint, targetLanguage: targetLanguage)
     }
     
     // MARK: - Single Summary
     
-    private func generateSingleSummary(transcript: String, model: String, endpoint: String) async throws -> String {
-        let systemPrompt = Self.buildSystemPrompt()
+    private func generateSingleSummary(transcript: String, model: String, endpoint: String, targetLanguage: String?) async throws -> String {
+        let systemPrompt = Self.buildSystemPrompt(targetLanguage: targetLanguage)
         let userPrompt = Self.buildUserPrompt(transcript: transcript)
         
         return try await sendChatRequest(
@@ -163,37 +168,121 @@ actor LLMService {
         )
     }
     
+    // MARK: - Q&A, Translation, and Title Generation
+    
+    /// Generate a short, relevant title for the meeting based on the transcript
+    func generateTitle(transcript: String) async throws -> String {
+        AppLogger.info("Запит на генерацію назви наради")
+        let model = AppSettings.shared.ollamaModel
+        let endpoint = AppSettings.shared.ollamaEndpoint
+        
+        let prompt = """
+        Напиши КОРОТКУ, інформативну назву для цієї наради на основі транскрипту (максимум 5-6 слів).
+        Не використовуй лапки, крапку в кінці, або слова "Назва:". Тільки саму назву.
+        Відповідай мовою транскрипту.
+        
+        Транскрипт:
+        \(String(transcript.prefix(3000))) // Use first 3000 chars to save time
+        """
+        
+        let result = try await sendChatRequest(
+            model: model,
+            endpoint: endpoint,
+            messages: [
+                ChatMessage(role: "system", content: "Ти асистент, що генерує короткі та влучні назви."),
+                ChatMessage(role: "user", content: prompt)
+            ]
+        )
+        
+        return result.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\"", with: "")
+    }
+    
+    /// Answer a user question based on the transcript
+    func answerQuestion(transcript: String, question: String, history: [ChatMessage] = []) async throws -> String {
+        AppLogger.info("Запит на відповідь на питання")
+        let model = AppSettings.shared.ollamaModel
+        let endpoint = AppSettings.shared.ollamaEndpoint
+        
+        let systemPrompt = """
+        Ти — асистент для аналізу нарад. Відповідай на питання користувача базуючись ТІЛЬКИ на наданому транскрипті.
+        Якщо відповіді немає в транскрипті, так і скажи.
+        
+        ТРАНСКРИПТ:
+        \(transcript)
+        """
+        
+        var messages: [ChatMessage] = [ChatMessage(role: "system", content: systemPrompt)]
+        messages.append(contentsOf: history)
+        messages.append(ChatMessage(role: "user", content: question))
+        
+        return try await sendChatRequest(
+            model: model,
+            endpoint: endpoint,
+            messages: messages
+        )
+    }
+    
+    /// Translate transcript or summary
+    func translateText(text: String, to languageName: String) async throws -> String {
+        AppLogger.info("Запит на переклад тексту на \(languageName)")
+        let model = AppSettings.shared.ollamaModel
+        let endpoint = AppSettings.shared.ollamaEndpoint
+        
+        let prompt = """
+        Переклади наступний текст на таку мову: \(languageName).
+        Збережи форматування (маркдаун, списки, абзаци).
+        Не додавай від себе жодних коментарів, тільки переклад.
+        
+        ТЕКСТ:
+        \(text)
+        """
+        
+        return try await sendChatRequest(
+            model: model,
+            endpoint: endpoint,
+            messages: [
+                ChatMessage(role: "system", content: "Ти професійний перекладач. Тільки перекладай текст, без додаткових коментарів."),
+                ChatMessage(role: "user", content: prompt)
+            ]
+        )
+    }
+    
     // MARK: - Chunked Summary (Long Meetings)
     
-    private func generateChunkedSummary(transcript: String, model: String, endpoint: String) async throws -> String {
-        // Split transcript into chunks
-        let chunkSize = Constants.maxTokensPerChunk * 3 // rough char estimate
-        let chunks = stride(from: 0, to: transcript.count, by: chunkSize).map { startIndex -> String in
-            let start = transcript.index(transcript.startIndex, offsetBy: startIndex)
-            let end = transcript.index(start, offsetBy: min(chunkSize, transcript.count - startIndex))
-            return String(transcript[start..<end])
+    private func generateChunkedSummary(transcript: String, model: String, endpoint: String, targetLanguage: String?) async throws -> String {
+        AppLogger.info("Транскрипт завеликий, розбиваємо на частини...")
+        
+        let words = transcript.components(separatedBy: .whitespacesAndNewlines)
+        let wordsPerChunk = Constants.maxTokensPerChunk * 2
+        var chunks: [String] = []
+        
+        for i in stride(from: 0, to: words.count, by: wordsPerChunk) {
+            let endIndex = min(i + wordsPerChunk, words.count)
+            let chunk = words[i..<endIndex].joined(separator: " ")
+            chunks.append(chunk)
         }
         
-        // Summarize each chunk
         var chunkSummaries: [String] = []
+        
         for (index, chunk) in chunks.enumerated() {
-            let prompt = """
-            Це частина \(index + 1) з \(chunks.count) транскрипту наради.
-            Витягни ключові тези, завдання та рішення з цієї частини.
+            AppLogger.info("Генерація резюме для частини \(index + 1)/\(chunks.count)")
+            let chunkPrompt = """
+            Це частина \(index + 1) з \(chunks.count) великої наради.
+            Зроби коротке резюме цієї частини. Виділи тільки ключові моменти.
             
-            Транскрипт (частина \(index + 1)):
+            ТРАНСКРИПТ:
             \(chunk)
             """
             
-            let summary = try await sendChatRequest(
+            let chunkSummary = try await sendChatRequest(
                 model: model,
                 endpoint: endpoint,
                 messages: [
-                    ChatMessage(role: "system", content: Self.buildSystemPrompt()),
-                    ChatMessage(role: "user", content: prompt)
+                    ChatMessage(role: "system", content: "Ти асистент, який робить вижимку тексту. Пиши коротко."),
+                    ChatMessage(role: "user", content: chunkPrompt)
                 ]
             )
-            chunkSummaries.append(summary)
+            chunkSummaries.append(chunkSummary)
         }
         
         // Merge summaries
@@ -209,7 +298,7 @@ actor LLMService {
             model: model,
             endpoint: endpoint,
             messages: [
-                ChatMessage(role: "system", content: Self.buildSystemPrompt()),
+                ChatMessage(role: "system", content: Self.buildSystemPrompt(targetLanguage: targetLanguage)),
                 ChatMessage(role: "user", content: mergePrompt)
             ]
         )
@@ -285,16 +374,27 @@ actor LLMService {
     
     // MARK: - Prompt Templates
     
-    private static func buildSystemPrompt() -> String {
-        """
-        Ти — асистент для аналізу нарад. Аналізуй транскрипти нарад та створюй структуровані резюме.
+    private static func buildSystemPrompt(targetLanguage: String?) -> String {
+        let languageInstruction: String
+        if let targetLanguage, targetLanguage != "auto" {
+            languageInstruction = "Відповідай мовою з кодом '\(targetLanguage)' (наприклад: 'uk' - українська, 'en' - англійська). Це ОДНОЗНАЧНА ВИМОГА."
+        } else {
+            languageInstruction = "Відповідай ТІЄЮ Ж МОВОЮ, якою написано більшу частину транскрипту (за замовчуванням — українською)."
+        }
+        
+        let customPrompt = AppSettings.shared.customSummaryPrompt
+        let customInstruction = customPrompt.isEmpty ? "" : "\nДОДАТКОВІ ІНСТРУКЦІЇ ВІД КОРИСТУВАЧА:\n\(customPrompt)\n"
+        
+        return """
+        Ти — професійний асистент для аналізу нарад. Аналізуй транскрипти нарад та створюй структуровані резюме.
         
         ПРАВИЛА:
-        1. Відповідай ТІЄЮ Ж МОВОЮ, якою написано транскрипт (за замовчуванням — українською)
-        2. НЕ вигадуй інформацію — витягуй ТІЛЬКИ те, що є в транскрипті
-        3. Якщо в транскрипті змішані мови — збережи оригінальну мову кожної цитати
-        4. Будь конкретним — уникай загальних фраз
-        5. Якщо чогось немає в транскрипті — пиши "Не згадувалось"
+        1. \(languageInstruction)
+        2. НЕ вигадуй інформацію — витягуй ТІЛЬКИ те, що є в транскрипті.
+        3. Якщо в транскрипті змішані мови — збережи оригінальну мову кожної цитати, але загальне резюме пиши цільовою мовою.
+        4. Будь конкретним — уникай загальних фраз і води.
+        5. Форматуй відповідь у Markdown (використовуй заголовки, списки, жирний шрифт).
+        \(customInstruction)
         """
     }
     

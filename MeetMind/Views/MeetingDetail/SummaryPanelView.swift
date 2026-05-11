@@ -39,6 +39,16 @@ struct SummaryPanelView: View {
                 
                 // Action buttons
                 HStack(spacing: Theme.Spacing.sm) {
+                    Picker("", selection: Bindable(AppSettings.shared).summaryLanguage) {
+                        ForEach(AppSettings.supportedLanguages, id: \.code) { lang in
+                            Text(lang.name).tag(lang.code)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .frame(width: 130)
+                    .disabled(isGenerating)
+                    .help("Мова резюме")
+                    
                     if let onCopy, !displayText.isEmpty {
                         Button(action: {
                             onCopy()

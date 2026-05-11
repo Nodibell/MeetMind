@@ -15,6 +15,7 @@ struct MeetingDetailView: View {
     
     @State private var tagInput: String = ""
     @State private var showTagInput = false
+    @State private var selectedRightTab: Int = 0
     
     var body: some View {
         VStack(spacing: 0) {
@@ -47,21 +48,44 @@ struct MeetingDetailView: View {
                 TranscriptPanelView(
                     segments: viewModel.filteredSegments,
                     searchText: $viewModel.searchText,
-                    isLoading: viewModel.isLoadingTranscript
+                    isLoading: viewModel.isLoadingTranscript,
+                    translatedText: viewModel.translatedTranscript,
+                    isTranslating: viewModel.isTranslatingTranscript,
+                    onClearTranslation: {
+                        viewModel.translatedTranscript = nil
+                    }
                 )
                 .frame(minWidth: 300)
                 
-                SummaryPanelView(
-                    summary: viewModel.summary,
-                    streamingSummary: viewModel.streamingSummary,
-                    isGenerating: viewModel.isRegeneratingSummary,
-                    onRegenerate: {
-                        Task { await viewModel.regenerateSummary() }
-                    },
-                    onCopy: { viewModel.copySummary() },
-                    onExport: { viewModel.exportToObsidian() },
-                    onCancel: { viewModel.cancelSummaryGeneration() }
-                )
+                TabView(selection: $selectedRightTab) {
+                    SummaryPanelView(
+                        summary: viewModel.summary,
+                        streamingSummary: viewModel.streamingSummary,
+                        isGenerating: viewModel.isRegeneratingSummary,
+                        onRegenerate: {
+                            Task { await viewModel.regenerateSummary() }
+                        },
+                        onCopy: { viewModel.copySummary() },
+                        onExport: { viewModel.exportToObsidian() },
+                        onCancel: { viewModel.cancelSummaryGeneration() }
+                    )
+                    .tabItem { Text("Резюме") }
+                    .tag(0)
+                    
+                    MeetingChatView(
+                        messages: viewModel.chatMessages,
+                        streamingResponse: viewModel.streamingChatResponse,
+                        isChatting: viewModel.isChatting,
+                        onSendMessage: { message in
+                            Task { await viewModel.sendChatMessage(message) }
+                        },
+                        onCancel: {
+                            viewModel.cancelChat()
+                        }
+                    )
+                    .tabItem { Text("Q&A Чат") }
+                    .tag(1)
+                }
                 .frame(minWidth: 300)
             }
         }
@@ -121,6 +145,19 @@ struct MeetingDetailView: View {
                             .font(Theme.Typography.caption)
                     }
                     .buttonStyle(.bordered)
+                    
+                    Menu {
+                        ForEach(AppSettings.supportedLanguages.filter { $0.code != "auto" }, id: \.code) { lang in
+                            Button(lang.name) {
+                                Task { await viewModel.translateTranscript(to: lang.name) }
+                            }
+                        }
+                    } label: {
+                        Label("Переклад", systemImage: "globe")
+                            .font(Theme.Typography.caption)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(viewModel.isTranslatingTranscript)
                 }
             }
             

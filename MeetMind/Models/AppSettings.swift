@@ -26,8 +26,10 @@ final class AppSettings: @unchecked Sendable {
         static let preferredDisplayID       = "preferredDisplayID"       // legacy
         static let preferredSystemAudioSourceID = "preferredSystemAudioSourceID"
         static let defaultLanguage          = "defaultLanguage"
+        static let summaryLanguage          = "summaryLanguage"
         static let ollamaModel              = "ollamaModel"
         static let ollamaEndpoint           = "ollamaEndpoint"
+        static let customSummaryPrompt      = "customSummaryPrompt"
         static let whisperModelLive         = "whisperModelLive"
         static let whisperModelPost         = "whisperModelPost"
         static let watchFolderPath          = "watchFolderPath"
@@ -72,6 +74,10 @@ final class AppSettings: @unchecked Sendable {
         didSet { UserDefaults.standard.set(defaultLanguage, forKey: Keys.defaultLanguage) }
     }
 
+    var summaryLanguage: String {
+        didSet { UserDefaults.standard.set(summaryLanguage, forKey: Keys.summaryLanguage) }
+    }
+
     // MARK: - Ollama
 
     var ollamaModel: String {
@@ -80,6 +86,10 @@ final class AppSettings: @unchecked Sendable {
 
     var ollamaEndpoint: String {
         didSet { UserDefaults.standard.set(ollamaEndpoint, forKey: Keys.ollamaEndpoint) }
+    }
+
+    var customSummaryPrompt: String {
+        didSet { UserDefaults.standard.set(customSummaryPrompt, forKey: Keys.customSummaryPrompt) }
     }
 
     // MARK: - Whisper Models
@@ -118,8 +128,10 @@ final class AppSettings: @unchecked Sendable {
         autoProcessWatchFolder  = UserDefaults.standard.bool(forKey: Keys.autoProcessWatchFolder)
         preferredInputDevice    = UserDefaults.standard.string(forKey: Keys.preferredInputDevice)
         defaultLanguage         = UserDefaults.standard.string(forKey: Keys.defaultLanguage) ?? Constants.defaultLanguage
+        summaryLanguage         = UserDefaults.standard.string(forKey: Keys.summaryLanguage) ?? "auto"
         ollamaModel             = UserDefaults.standard.string(forKey: Keys.ollamaModel) ?? Constants.defaultOllamaModel
         ollamaEndpoint          = UserDefaults.standard.string(forKey: Keys.ollamaEndpoint) ?? Constants.defaultOllamaEndpoint
+        customSummaryPrompt     = UserDefaults.standard.string(forKey: Keys.customSummaryPrompt) ?? ""
 
         // --- Whisper models (with legacy name migration) ---
         let liveRaw = UserDefaults.standard.string(forKey: Keys.whisperModelLive) ?? Constants.liveTranscriptionModel

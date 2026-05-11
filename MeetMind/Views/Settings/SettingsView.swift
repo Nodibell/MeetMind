@@ -152,6 +152,16 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Додатковий Промпт для Резюме") {
+                TextEditor(text: $viewModel.settings.customSummaryPrompt)
+                    .frame(height: 80)
+                    .font(.body)
+                
+                Text("Тут можна додати власні інструкції (наприклад: 'Завжди форматуй як маркований список').")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             if let error = viewModel.ollamaError {
                 Section {
                     Label(error, systemImage: "exclamationmark.triangle")

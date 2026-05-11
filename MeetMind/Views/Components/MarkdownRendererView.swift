@@ -71,12 +71,14 @@ struct MarkdownRendererView: View {
                 .fontWeight(.bold)
                 .foregroundStyle(Theme.Colors.accentPrimary)
                 .padding(.top, Theme.Spacing.sm)
+                .textSelection(.enabled)
             
         case .paragraph:
             Text(parseInlineMarkdown(block.content))
                 .font(Theme.Typography.body)
                 .foregroundStyle(Theme.Colors.textPrimary)
                 .lineSpacing(4)
+                .textSelection(.enabled)
             
         case .listItem:
             HStack(alignment: .top, spacing: 8) {
@@ -85,6 +87,7 @@ struct MarkdownRendererView: View {
                 Text(parseInlineMarkdown(block.content))
                     .font(Theme.Typography.body)
                     .foregroundStyle(Theme.Colors.textSecondary)
+                    .textSelection(.enabled)
             }
             .padding(.leading, 4)
         }
@@ -131,8 +134,9 @@ struct StreamingMarkdownView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-                // For streaming, we use simple text to avoid flickering during parsing
-                Text(text)
+                // For streaming, we use simple text to avoid flickering during parsing.
+                // We use TypewriterTextView to smooth out the large token chunks from Ollama.
+                TypewriterTextView(fullText: text, isStreaming: isStreaming, delayMilliseconds: 10)
                     .font(Theme.Typography.body)
                     .foregroundStyle(Theme.Colors.textPrimary)
                     .textSelection(.enabled)
