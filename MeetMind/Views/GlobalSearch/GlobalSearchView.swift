@@ -49,7 +49,7 @@ struct GlobalSearchView: View {
                 Text("Глобальний запит")
                     .font(Theme.Typography.title2)
                     .foregroundStyle(Theme.Colors.textPrimary)
-                Text("Аналіз по всіх ваших нарадах (\(allMeetings.count))")
+                Text(String(localized: "Аналіз по всіх ваших нарад \(allMeetings.count)"))
                     .font(Theme.Typography.caption)
                     .foregroundStyle(Theme.Colors.textTertiary)
             }

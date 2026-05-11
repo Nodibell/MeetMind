@@ -385,6 +385,149 @@
           }
         }
       }
+    },
+    "Резюме буде згенеровано після запису" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Summary will be generated after recording"
+          }
+        }
+      }
+    },
+    "Згенерувати резюме" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Generate summary"
+          }
+        }
+      }
+    },
+    "Задайте питання по транскрипту..." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ask about the transcript..."
+          }
+        }
+      }
+    },
+    "Задайте питання щодо наради" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ask about the meeting"
+          }
+        }
+      }
+    },
+    "Перекладаємо..." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translating..."
+          }
+        }
+      }
+    },
+    "Переклад" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translation"
+          }
+        }
+      }
+    },
+    "Завантаження транскрипту..." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading transcript..."
+          }
+        }
+      }
+    },
+    "Транскрипт відсутній" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transcript missing"
+          }
+        }
+      }
+    },
+    "Назва наради" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeting Title"
+          }
+        }
+      }
+    },
+    "тег" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tag"
+          }
+        }
+      }
+    },
+    "Натисніть + щоб почати запис" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Press + to start recording"
+          }
+        }
+      }
+    },
+    "Я можу проаналізувати всі ваші наради і знайти відповіді на запитання на кшталт:\n• «Які рішення по бюджету ми приймали в квітні?»\n• «Хто відповідальний за проект X?»\n• «Зроби зведення всіх завдань за тиждень»" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I can analyze all your meetings and find answers to questions like:\n• \"What budget decisions did we make in April?\"\n• \"Who is responsible for project X?\"\n• \"Give me a summary of all tasks for the week\""
+          }
+        }
+      }
+    },
+    "Аналіз по всіх ваших нарад %lld" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Analysis of all your meetings %lld"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
