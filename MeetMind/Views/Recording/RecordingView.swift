@@ -77,18 +77,24 @@ struct RecordingView: View {
                 .foregroundStyle(Theme.Colors.textPrimary)
                 .textFieldStyle(.plain)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .minimumScaleFactor(0.7)
             
             Spacer()
             
-            // Timer
-            if viewModel.state == .recording {
-                TimerView(elapsedTime: viewModel.audioManager.elapsedTime, style: .medium)
+            // Timer and Status grouped
+            HStack(spacing: Theme.Spacing.lg) {
+                if viewModel.state == .recording {
+                    TimerView(elapsedTime: viewModel.audioManager.elapsedTime, style: .medium)
+                        .fixedSize()
+                }
+                
+                // Status badge
+                if viewModel.state != .idle {
+                    StatusBadgeView(status: statusForState)
+                        .fixedSize()
+                }
             }
-            
-            // Status badge
-            if viewModel.state != .idle {
-                StatusBadgeView(status: statusForState)
-            }
+            .layoutPriority(1)
         }
         .padding(.horizontal, Theme.Spacing.xxl)
         .padding(.vertical, Theme.Spacing.lg)

@@ -64,9 +64,11 @@ struct RecordingControlsView: View {
                 ZStack {
                     // Outer glow ring
                     Circle()
-                        .stroke(buttonColor.opacity(isHoveringRecord ? 0.4 : 0.15), lineWidth: 3)
+                        .stroke(buttonColor.opacity(0.3), lineWidth: 2)
                         .frame(width: 88, height: 88)
-                        .scaleEffect(viewModel.state == .recording ? 1.1 : 1.0)
+                        .scaleEffect(viewModel.state == .recording ? 1.2 : 1.0)
+                        .blur(radius: viewModel.state == .recording ? 4 : 0)
+                        .opacity(viewModel.state == .recording ? 0.6 : (isHoveringRecord ? 0.4 : 0.15))
                         .animation(viewModel.state == .recording ? Theme.Animation.pulse : .default,
                                    value: viewModel.state)
 

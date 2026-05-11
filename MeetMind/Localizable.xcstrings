@@ -77,6 +77,39 @@
           }
         }
       }
+    },
+    "Експортовано в Obsidian" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exported to Obsidian"
+          }
+        }
+      }
+    },
+    "Підготовка джерела аудіо..." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparing audio source..."
+          }
+        }
+      }
+    },
+    "Транскрипція аудіо (high-quality)..." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transcribing audio (high-quality)..."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

@@ -168,6 +168,7 @@ struct TranscriptDetailRow: View {
                     .foregroundStyle(Theme.Colors.textTertiary)
             }
             .frame(width: 45, alignment: .trailing)
+            .fixedSize(horizontal: true, vertical: false)
             
             // Vertical line
             Rectangle()

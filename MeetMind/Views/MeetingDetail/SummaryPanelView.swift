@@ -40,70 +40,70 @@ struct SummaryPanelView: View {
                 Spacer()
                 
                 // Action buttons
-                HStack(spacing: Theme.Spacing.sm) {
-                    Picker("", selection: $selectedLanguage) {
-                        ForEach(AppSettings.supportedLanguages, id: \.code) { lang in
-                            Text(lang.name).tag(lang.code)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .frame(width: 130)
-                    .disabled(isGenerating)
-                    .help("Мова резюме")
-                    
-                    if let onCopy, !displayText.isEmpty {
-                        Button(action: {
-                            onCopy()
-                            withAnimation(Theme.Animation.fast) { didCopy = true }
-                            Task {
-                                try? await Task.sleep(for: .seconds(1.5))
-                                await MainActor.run {
-                                    withAnimation(Theme.Animation.fast) { self.didCopy = false }
-                                }
-                            }
-                        }) {
-                            Image(systemName: didCopy ? "checkmark" : "doc.on.doc")
-                                .font(.system(size: 12))
-                                .foregroundStyle(didCopy ? Theme.Colors.success : Theme.Colors.textTertiary)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Copy summary")
-                    }
-
-                    if let onExport {
-                        Button(action: onExport) {
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.system(size: 12))
-                                .foregroundStyle(Theme.Colors.textTertiary)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Експорт в Obsidian")
-                    }
-
+                HStack(spacing: Theme.Spacing.md) {
                     if isGenerating, let onCancel {
                         Button(action: onCancel) {
                             HStack(spacing: 4) {
-                                Image(systemName: "xmark")
-                                    .font(.system(size: 10))
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 14))
                                 Text("Скасувати")
-                                    .font(Theme.Typography.footnote)
+                                    .font(Theme.Typography.caption)
                             }
                             .foregroundStyle(Theme.Colors.error)
                         }
                         .buttonStyle(.plain)
-                    } else if let onRegenerate {
-                        Button(action: onRegenerate) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "arrow.clockwise")
-                                    .font(.system(size: 11))
-                                Text("Регенерувати")
-                                    .font(Theme.Typography.footnote)
+                    } else {
+                        // Language Picker (Compact)
+                        Picker("", selection: $selectedLanguage) {
+                            ForEach(AppSettings.supportedLanguages, id: \.code) { lang in
+                                Text(lang.name).tag(lang.code)
                             }
-                            .foregroundStyle(isHoveringRegenerate ? Theme.Colors.accentPrimary : Theme.Colors.textTertiary)
                         }
-                        .buttonStyle(.plain)
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .frame(width: 80)
+                        .controlSize(.small)
                         .disabled(isGenerating)
-                        .onHover { isHoveringRegenerate = $0 }
+                        
+                        // Action Icons
+                        HStack(spacing: Theme.Spacing.md) {
+                            if let onCopy, !displayText.isEmpty {
+                                Button(action: {
+                                    onCopy()
+                                    withAnimation(Theme.Animation.fast) { didCopy = true }
+                                    Task {
+                                        try? await Task.sleep(for: .seconds(1.5))
+                                        await MainActor.run {
+                                            withAnimation(Theme.Animation.fast) { self.didCopy = false }
+                                        }
+                                    }
+                                }) {
+                                    Image(systemName: didCopy ? "checkmark" : "doc.on.doc")
+                                        .foregroundStyle(didCopy ? Theme.Colors.success : Theme.Colors.textTertiary)
+                                }
+                                .help("Копіювати резюме")
+                            }
+
+                            if let onExport {
+                                Button(action: onExport) {
+                                    Image(systemName: "square.and.arrow.up")
+                                        .foregroundStyle(Theme.Colors.textTertiary)
+                                }
+                                .help("Експорт в Obsidian")
+                            }
+
+                            if let onRegenerate {
+                                Button(action: onRegenerate) {
+                                    Image(systemName: "arrow.clockwise")
+                                        .foregroundStyle(isHoveringRegenerate ? Theme.Colors.accentPrimary : Theme.Colors.textTertiary)
+                                }
+                                .disabled(isGenerating)
+                                .onHover { isHoveringRegenerate = $0 }
+                                .help("Регенерувати")
+                            }
+                        }
+                        .font(.system(size: 13))
+                        .buttonStyle(.plain)
                     }
                 }
                 .fixedSize(horizontal: true, vertical: false)

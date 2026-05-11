@@ -102,64 +102,50 @@ struct MeetingDetailView: View {
     private var topBar: some View {
         VStack(spacing: Theme.Spacing.sm) {
             HStack(spacing: Theme.Spacing.md) {
-                // Meeting title
+                // Meeting title and metadata
                 VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
                     TextField("Назва наради", text: $viewModel.meetingTitle)
                         .font(Theme.Typography.title2)
                         .foregroundStyle(Theme.Colors.textPrimary)
                         .textFieldStyle(.plain)
+                        .minimumScaleFactor(0.7)
                         .onSubmit {
-                            viewModel.updateMeetingTitle()
-                        }
-                        .onChange(of: viewModel.meetingTitle) { _, _ in
-                            // Title will be persisted on submit or focus loss
-                        }
-                        .onExitCommand {
                             viewModel.updateMeetingTitle()
                         }
                     
                     HStack(spacing: Theme.Spacing.md) {
                         Label(viewModel.meeting.displayDate, systemImage: "calendar")
-                            .font(Theme.Typography.caption)
-                            .foregroundStyle(Theme.Colors.textSecondary)
+                            .fixedSize()
                         
                         Label(viewModel.meeting.displayDuration, systemImage: "clock")
-                            .font(Theme.Typography.caption)
-                            .foregroundStyle(Theme.Colors.textSecondary)
+                            .fixedSize()
                         
                         StatusBadgeView(status: viewModel.meeting.status)
+                            .fixedSize()
                     }
+                    .font(Theme.Typography.caption)
+                    .foregroundStyle(Theme.Colors.textSecondary)
                 }
+                .layoutPriority(1)
                 
-                Spacer()
+                Spacer(minLength: Theme.Spacing.md)
                 
                 // Actions
                 HStack(spacing: Theme.Spacing.sm) {
                     Button(action: { viewModel.copyTranscript() }) {
                         Label("Транскрипт", systemImage: "doc.on.doc")
-                            .font(Theme.Typography.caption)
                     }
                     .buttonStyle(.bordered)
                     
                     Button(action: { viewModel.exportToObsidian() }) {
                         Label("Obsidian", systemImage: "square.and.arrow.up")
-                            .font(Theme.Typography.caption)
                     }
                     .buttonStyle(.bordered)
                     
-                    Menu {
-                        ForEach(AppSettings.supportedLanguages.filter { $0.code != "auto" }, id: \.code) { lang in
-                            Button(lang.name) {
-                                Task { await viewModel.translateTranscript(to: lang.name) }
-                            }
-                        }
-                    } label: {
-                        Label("Переклад", systemImage: "globe")
-                            .font(Theme.Typography.caption)
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(viewModel.isTranslatingTranscript)
+                    translationMenu
                 }
+                .font(Theme.Typography.caption)
+                .controlSize(.small)
             }
             
             // Tags
@@ -170,6 +156,20 @@ struct MeetingDetailView: View {
         .background(Theme.Colors.backgroundSecondary.opacity(0.5))
     }
     
+    private var translationMenu: some View {
+        Menu {
+            ForEach(AppSettings.supportedLanguages.filter { $0.code != "auto" }, id: \.code) { lang in
+                Button(lang.name) {
+                    Task { await viewModel.translateTranscript(to: lang.name) }
+                }
+            }
+        } label: {
+            Label("Переклад", systemImage: "globe")
+        }
+        .buttonStyle(.bordered)
+        .disabled(viewModel.isTranslatingTranscript)
+    }
+    
     // MARK: - Tags
     
     private var tagsRow: some View {
@@ -178,18 +178,18 @@ struct MeetingDetailView: View {
                 HStack(spacing: 4) {
                     Text("#\(tag)")
                         .font(Theme.Typography.footnote)
-                        .foregroundStyle(Theme.Colors.textSecondary)
+                        .foregroundStyle(Theme.Colors.textPrimary)
                     
                     Button(action: { viewModel.removeTag(tag) }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 8, weight: .bold))
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 10))
                             .foregroundStyle(Theme.Colors.textTertiary)
                     }
                     .buttonStyle(.plain)
                 }
                 .padding(.horizontal, Theme.Spacing.sm)
                 .padding(.vertical, Theme.Spacing.xxs)
-                .background(tag.tagColor)
+                .background(tag.tagColor.opacity(0.3))
                 .clipShape(Capsule())
             }
             

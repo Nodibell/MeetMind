@@ -55,10 +55,10 @@ struct MeetingRowView: View {
                     ForEach(meeting.tags.prefix(3), id: \.self) { tag in
                         Text("#\(tag)")
                             .font(Theme.Typography.footnote)
-                            .foregroundStyle(Theme.Colors.textTertiary)
+                            .foregroundStyle(Theme.Colors.textPrimary)
                             .padding(.horizontal, Theme.Spacing.xs)
                             .padding(.vertical, 1)
-                            .background(tag.tagColor.opacity(0.5))
+                            .background(tag.tagColor.opacity(0.3))
                             .clipShape(Capsule())
                     }
                     
