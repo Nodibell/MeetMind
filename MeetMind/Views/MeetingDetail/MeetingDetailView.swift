@@ -133,19 +133,32 @@ struct MeetingDetailView: View {
                 // Actions
                 HStack(spacing: Theme.Spacing.sm) {
                     Button(action: { viewModel.copyTranscript() }) {
-                        Label("Транскрипт", systemImage: "doc.on.doc")
+                        HStack(spacing: 6) {
+                            Image(systemName: "doc.on.doc")
+                            Text("Транскрипт")
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Theme.Colors.backgroundTertiary.opacity(0.5))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.plain)
                     
                     Button(action: { viewModel.exportToObsidian() }) {
-                        Label("Obsidian", systemImage: "square.and.arrow.up")
+                        HStack(spacing: 6) {
+                            Image(systemName: "square.and.arrow.up")
+                            Text("Obsidian")
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Theme.Colors.backgroundTertiary.opacity(0.5))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.plain)
                     
                     translationMenu
                 }
                 .font(Theme.Typography.caption)
-                .controlSize(.small)
             }
             
             // Tags
@@ -164,9 +177,16 @@ struct MeetingDetailView: View {
                 }
             }
         } label: {
-            Label("Переклад", systemImage: "globe")
+            HStack(spacing: 6) {
+                Image(systemName: "globe")
+                Text("Переклад")
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Theme.Colors.backgroundTertiary.opacity(0.5))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.plain)
         .disabled(viewModel.isTranslatingTranscript)
     }
     

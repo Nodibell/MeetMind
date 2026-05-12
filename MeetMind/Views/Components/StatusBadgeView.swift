@@ -21,7 +21,7 @@ struct StatusBadgeView: View {
                 .scaleEffect(isPulsing ? 1.15 : 1.0)
                 .animation(isAnimated ? Theme.Animation.pulse : .default, value: isPulsing)
             
-            Text(status.displayName)
+            Text(LocalizedStringKey(status.displayName))
                 .font(Theme.Typography.captionMedium)
                 .foregroundStyle(statusColor)
         }
