@@ -36,12 +36,19 @@ final class AppSettings: @unchecked Sendable {
         static let watchFolderPath          = "watchFolderPath"
         static let autoProcessWatchFolder   = "autoProcessWatchFolder"
         static let appLanguage              = "appLanguage"
+        static let waveformFPS              = "waveformFPS"
     }
 
     // MARK: - App Language
     
     var appLanguage: String {
         didSet { UserDefaults.standard.set(appLanguage, forKey: Keys.appLanguage) }
+    }
+
+    // MARK: - Visuals
+    
+    var waveformFPS: Int {
+        didSet { UserDefaults.standard.set(waveformFPS, forKey: Keys.waveformFPS) }
     }
 
     // MARK: - Obsidian
@@ -146,6 +153,8 @@ final class AppSettings: @unchecked Sendable {
         defaultLanguage         = UserDefaults.standard.string(forKey: Keys.defaultLanguage) ?? Constants.defaultLanguage
         summaryLanguage         = UserDefaults.standard.string(forKey: Keys.summaryLanguage) ?? "auto"
         appLanguage             = UserDefaults.standard.string(forKey: Keys.appLanguage) ?? "uk"
+        waveformFPS             = UserDefaults.standard.integer(forKey: Keys.waveformFPS)
+        if waveformFPS == 0 { waveformFPS = 60 }
         
         // --- LLM Settings ---
         if let providerStr = UserDefaults.standard.string(forKey: Keys.llmProvider),

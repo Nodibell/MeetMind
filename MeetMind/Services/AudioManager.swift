@@ -40,6 +40,8 @@ final class AudioManager: NSObject, @unchecked Sendable {
     private var audioFile: AVAudioFile?
     private var currentRecordingURL: URL?
     private var scStream: SCStream?
+    private var waveformTimer: Timer?
+    private var currentRMS: Float = 0
 
     private let audioPipelineQueue = DispatchQueue(
         label: Constants.audioPipelineQueueLabel,
@@ -179,8 +181,7 @@ final class AudioManager: NSObject, @unchecked Sendable {
                     let rms = self.calculateRMS(buffer: buffer)
 
                     DispatchQueue.main.async {
-                        self.audioLevels.removeFirst()
-                        self.audioLevels.append(rms)
+                        self.currentRMS = rms
                     }
 
                     // Convert and append to accumulated samples
@@ -230,6 +231,15 @@ final class AudioManager: NSObject, @unchecked Sendable {
         timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             self?.elapsedTime = Date().timeIntervalSince(startTime)
         }
+        
+        // Start waveform visual timer
+        let fps = AppSettings.shared.waveformFPS
+        let interval = 1.0 / Double(fps)
+        waveformTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            self.audioLevels.removeFirst()
+            self.audioLevels.append(self.currentRMS)
+        }
 
         return fileURL
     }
@@ -254,6 +264,8 @@ final class AudioManager: NSObject, @unchecked Sendable {
 
         timer?.invalidate()
         timer = nil
+        waveformTimer?.invalidate()
+        waveformTimer = nil
 
         isRecording = false
         let url = currentRecordingURL
@@ -539,6 +551,15 @@ final class AudioManager: NSObject, @unchecked Sendable {
             timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
                 self?.elapsedTime = Date().timeIntervalSince(startTime)
             }
+            
+            // Start waveform visual timer
+            let fps = AppSettings.shared.waveformFPS
+            let interval = 1.0 / Double(fps)
+            waveformTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+                guard let self = self else { return }
+                self.audioLevels.removeFirst()
+                self.audioLevels.append(self.currentRMS)
+            }
         }
 
         AppLogger.audio("Запис системного звуку запущено")
@@ -679,8 +700,7 @@ extension AudioManager: SCStreamOutput, SCStreamDelegate {
                 vDSP_measqv(samples, 1, &meanSquare, vDSP_Length(samples.count))
                 let rms = min(sqrt(meanSquare) * 5.0, 1.0)
                 DispatchQueue.main.async {
-                    self.audioLevels.removeFirst()
-                    self.audioLevels.append(rms)
+                    self.currentRMS = rms
                 }
             }
         }

@@ -65,6 +65,18 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Section("Візуалізація") {
+                Picker("Частота оновлення хвилі", selection: $viewModel.settings.waveformFPS) {
+                    Text("30 FPS").tag(30)
+                    Text("60 FPS").tag(60)
+                    Text("90 FPS").tag(90)
+                    Text("120 FPS").tag(120)
+                }
+                
+                Text("Вища частота оновлення забезпечує плавнішу анімацію, але може споживати більше енергії")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
         .padding()

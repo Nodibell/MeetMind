@@ -1332,6 +1332,39 @@
         }
       }
     },
+    "Візуалізація" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Visualization"
+          }
+        }
+      }
+    },
+    "Частота оновлення хвилі" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waveform Refresh Rate"
+          }
+        }
+      }
+    },
+    "Вища частота оновлення забезпечує плавнішу анімацію, але може споживати більше енергії" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Higher refresh rate provides smoother animation but may consume more power"
+          }
+        }
+      }
+    },
     "Помилка аналізу: %@" : {
       "extractionState" : "manual",
       "localizations" : {
