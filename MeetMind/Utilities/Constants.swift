@@ -29,6 +29,21 @@ enum Constants {
     nonisolated static let audioBufferSize: UInt32 = 4096
     nonisolated static let waveformSampleCount = 100
     nonisolated static let audioChunkDuration: TimeInterval = 5.0  // seconds per live chunk
+
+    // MARK: - Audio Pipeline Infrastructure
+    nonisolated static let audioPipelineQueueLabel = "com.meetmind.ai.audio-pipeline.serial"
+    nonisolated static let keepAliveIntervalSeconds: Double = 5.0
+    nonisolated static let streamStallThresholdSeconds: Double = 5.0
+    nonisolated static let maxStreamReconnectionRetries = 3
+    nonisolated static let reconnectionBaseDelaySeconds: Double = 1.0
+
+    // MARK: - Diarization
+    nonisolated static let diarizationDirectoryName = "Diarization"
+    nonisolated static var diarizationDirectory: URL {
+        let dir = appSupportDirectory.appendingPathComponent(diarizationDirectoryName)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
     
     // MARK: - Whisper Models
     nonisolated static let liveTranscriptionModel = "large-v3_turbo"

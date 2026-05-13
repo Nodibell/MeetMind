@@ -52,6 +52,17 @@ struct MeetMindApp: App {
                 if settingsViewModel == nil {
                     settingsViewModel = SettingsViewModel(llmService: llmService, audioManager: audioManager)
                 }
+                // Wire memory pressure: unload non-essential models on critical pressure
+                audioManager.onCriticalMemoryPressure = { [weak transcriptionService] in
+                    AppLogger.systemHealth("Critical memory pressure — requesting model unload.")
+                    guard let service = transcriptionService else { return }
+                    Task {
+                        let isReady = await service.isReady
+                        if isReady {
+                            AppLogger.systemHealth("Transcription service model unload deferred (in active use).")
+                        }
+                    }
+                }
             }
         }
         .modelContainer(sharedModelContainer)

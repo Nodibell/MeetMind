@@ -8,7 +8,6 @@
 import Foundation
 import AVFoundation
 import WhisperKit
-import SpeakerKit
 
 /// On-device speech-to-text transcription using WhisperKit
 actor TranscriptionService {
@@ -172,23 +171,24 @@ actor TranscriptionService {
                 }
             )
 
-            // 3. Diarization (Speaker Recognition)
-            AppLogger.info("Початок розпізнавання дикторів...")
-            let speakerKit = try? SpeakerKit()
-            let audioSamples = try? url.loadAudioSamples()
-            let diarizationResult: DiarizationResult? = if let audioSamples, let speakerKit {
-                try? await speakerKit.diarize(audioArray: audioSamples)
-            } else {
-                nil
-            }
-            
-            let speakerSegments = diarizationResult?.segments
-            
+            // 3. Diarization (Speaker Recognition) via FluidAudio
+            AppLogger.ai("Starting FluidAudio speaker diarization...")
+            let diarizationEngine = await MeetMindDiarizationEngine()
             var segments = convertResults(results, offset: 0)
-            
-            // Match speakers to segments
-            if let speakerSegments {
-                segments = matchSpeakers(textSegments: segments, speakerSegments: speakerSegments)
+
+            do {
+                try await diarizationEngine.prepareModels()
+                let diarizationSegments = try await diarizationEngine.diarize(fileURL: url)
+                segments = diarizationEngine.alignSpeakers(
+                    textSegments: segments,
+                    diarizationSegments: diarizationSegments
+                )
+                AppLogger.ai("Diarization alignment complete: \(Set(segments.compactMap(\.speakerID)).count) speakers detected.")
+                // Free CoreML models after use
+                await diarizationEngine.unloadModels()
+            } catch {
+                AppLogger.aiError("Diarization failed, continuing without speaker labels", error: error)
+                // Continue without speaker labels — transcription is still valid
             }
 
             // Detect dominant language
@@ -262,25 +262,7 @@ actor TranscriptionService {
         return segments.sorted { $0.startTime < $1.startTime }
     }
 
-    private func matchSpeakers(textSegments: [MeetingTranscriptSegment], speakerSegments: [SpeakerSegment]) -> [MeetingTranscriptSegment] {
-        return textSegments.map { textSegment in
-            // Find the speaker who was speaking during the majority of this text segment
-            let midPoint = textSegment.startTime + (textSegment.endTime - textSegment.startTime) / 2
-            
-            let bestSpeaker = speakerSegments.first { speaker in
-                midPoint >= Double(speaker.startTime) && midPoint <= Double(speaker.endTime)
-            } ?? speakerSegments.min(by: { abs(Double($0.startTime) - textSegment.startTime) < abs(Double($1.startTime) - textSegment.startTime) })
-            
-            return MeetingTranscriptSegment(
-                id: textSegment.id,
-                startTime: textSegment.startTime,
-                endTime: textSegment.endTime,
-                text: textSegment.text,
-                speakerID: bestSpeaker.map { "\($0.speaker)" },
-                language: textSegment.language
-            )
-        }
-    }
+
 
     private func updateState(_ newState: ServiceState) {
         state = newState

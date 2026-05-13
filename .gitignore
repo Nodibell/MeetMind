@@ -34,3 +34,10 @@ Recordings/
 ## User Settings
 xcuserdata/
 *.dmg
+Export*/
+*.xcarchive
+*.ipa
+*.app
+
+# Local overrides (user-specific build / export caches)
+.DS_Store

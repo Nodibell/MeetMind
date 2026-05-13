@@ -11,7 +11,7 @@
 		4321F5725102B5645B211094 /* AppSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65026034DB6EE24C4B3B37DE /* AppSettingsTests.swift */; };
 		4C1507582FAB90E0007C784F /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4C1507572FAB90E0007C784F /* WhisperKit */; };
 		5C780215514CAF440FE1B77C /* LLMServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD18B9F1ACC65366B7756B10 /* LLMServiceTests.swift */; };
-		EBFCFF4796D7061B0C2285F6 /* SpeakerKit in Frameworks */ = {isa = PBXBuildFile; productRef = D6AC83B81297D9491D198D6A /* SpeakerKit */; };
+		EBFCFF4796D7061B0C2285F6 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = D6AC83B81297D9491D198D6A /* FluidAudio */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -67,7 +67,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				4C1507582FAB90E0007C784F /* WhisperKit in Frameworks */,
-				EBFCFF4796D7061B0C2285F6 /* SpeakerKit in Frameworks */,
+				EBFCFF4796D7061B0C2285F6 /* FluidAudio in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -158,7 +158,7 @@
 			name = MeetMind;
 			packageProductDependencies = (
 				4C1507572FAB90E0007C784F /* WhisperKit */,
-				D6AC83B81297D9491D198D6A /* SpeakerKit */,
+				D6AC83B81297D9491D198D6A /* FluidAudio */,
 			);
 			productName = MeetMind;
 			productReference = 4CDCD3462FAB7C4900DCA3CB /* MeetMind.app */;
@@ -190,6 +190,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				4C1507562FAB90E0007C784F /* XCRemoteSwiftPackageReference "argmax-oss-swift" */,
+				AA0000012FAB90E0007C784F /* XCRemoteSwiftPackageReference "FluidAudio" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 4CDCD3472FAB7C4900DCA3CB /* Products */;
@@ -392,7 +393,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.2.6;
+				MARKETING_VERSION = 1.2.7;
 				PRODUCT_BUNDLE_IDENTIFIER = oleksii.chumak.MeetMind;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -429,7 +430,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.2.6;
+				MARKETING_VERSION = 1.2.7;
 				PRODUCT_BUNDLE_IDENTIFIER = oleksii.chumak.MeetMind;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -510,6 +511,14 @@
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
+		AA0000012FAB90E0007C784F /* XCRemoteSwiftPackageReference "FluidAudio" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/FluidInference/FluidAudio.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.12.4;
+			};
+		};
 
 /* Begin XCSwiftPackageProductDependency section */
 		4C1507572FAB90E0007C784F /* WhisperKit */ = {
@@ -517,10 +526,10 @@
 			package = 4C1507562FAB90E0007C784F /* XCRemoteSwiftPackageReference "argmax-oss-swift" */;
 			productName = WhisperKit;
 		};
-		D6AC83B81297D9491D198D6A /* SpeakerKit */ = {
+		D6AC83B81297D9491D198D6A /* FluidAudio */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 4C1507562FAB90E0007C784F /* XCRemoteSwiftPackageReference "argmax-oss-swift" */;
-			productName = SpeakerKit;
+			package = AA0000012FAB90E0007C784F /* XCRemoteSwiftPackageReference "FluidAudio" */;
+			productName = FluidAudio;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

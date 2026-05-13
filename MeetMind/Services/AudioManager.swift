@@ -9,6 +9,7 @@ import AVFoundation
 import Accelerate
 import ScreenCaptureKit
 import CoreMedia
+import os
 
 /// Manages audio capture from microphone or virtual audio devices
 @Observable
@@ -40,7 +41,21 @@ final class AudioManager: NSObject, @unchecked Sendable {
     private var currentRecordingURL: URL?
     private var scStream: SCStream?
 
-    private let processingQueue = DispatchQueue(label: "com.meetmind.audio", qos: .userInteractive)
+    private let audioPipelineQueue = DispatchQueue(
+        label: Constants.audioPipelineQueueLabel,
+        qos: .userInteractive
+    )
+
+    // MARK: - Keep-Alive Watchdog
+    private var keepAliveTimer: DispatchSourceTimer?
+    private let lastBufferTimestamp = OSAllocatedUnfairLock(initialState: CFAbsoluteTimeGetCurrent())
+    private var streamConfiguration: SCStreamConfiguration?
+    private var streamFilter: SCContentFilter?
+    private var reconnectionRetryCount = 0
+
+    // MARK: - Memory Pressure
+    private var memoryPressureSource: DispatchSourceMemoryPressure?
+    var onCriticalMemoryPressure: (() -> Void)?
 
     // MARK: - Audio Device Model
     struct AudioDevice: Identifiable, Sendable, Hashable {
@@ -159,7 +174,7 @@ final class AudioManager: NSObject, @unchecked Sendable {
                 guard let self = self else { return }
 
                 // Downsample for Whisper
-                self.processingQueue.async {
+                self.audioPipelineQueue.async {
                     // Calculate RMS for waveform
                     let rms = self.calculateRMS(buffer: buffer)
 
@@ -226,8 +241,14 @@ final class AudioManager: NSObject, @unchecked Sendable {
         audioEngine?.stop()
         audioEngine = nil
 
-        scStream?.stopCapture()
+        if let stream = scStream {
+            Task {
+                try? await stream.stopCapture()
+            }
+        }
         scStream = nil
+        stopKeepAliveMonitor()
+        stopMemoryPressureMonitoring()
 
         audioFile = nil // This closes the file
 
@@ -470,10 +491,17 @@ final class AudioManager: NSObject, @unchecked Sendable {
         config.channelCount = Int(Constants.whisperChannelCount)
         config.excludesCurrentProcessAudio = true
 
+        // Enable microphone capture on macOS 15+ to support mixed system+mic recording
+        if #available(macOS 15.0, *) {
+            config.captureMicrophone = true
+        }
+
         config.width = 2
         config.height = 2
         config.minimumFrameInterval = CMTime(value: 1, timescale: 10)
         config.showsCursor = false
+
+        AppLogger.audio("SCStream config: sampleRate=\(config.sampleRate), channels=\(config.channelCount), excludesSelf=\(config.excludesCurrentProcessAudio)")
 
         let stream = SCStream(filter: filter, configuration: config, delegate: self)
 
@@ -490,10 +518,18 @@ final class AudioManager: NSObject, @unchecked Sendable {
             audioFile = try AVAudioFile(forWriting: fileURL, settings: settings)
         }
 
-        try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: processingQueue)
+        try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: audioPipelineQueue)
         try await stream.startCapture()
 
         scStream = stream
+        self.streamConfiguration = config
+        self.streamFilter = filter
+        reconnectionRetryCount = 0
+
+        // Start keep-alive watchdog
+        startKeepAliveMonitor(stream: stream, configuration: config)
+        // Start memory pressure monitoring
+        startMemoryPressureMonitoring()
 
         if ownsRecordingState {
             isRecording = true
@@ -538,108 +574,229 @@ final class AudioManager: NSObject, @unchecked Sendable {
 
 // MARK: - SCStreamOutput & SCStreamDelegate
 extension AudioManager: SCStreamOutput, SCStreamDelegate {
-    nonisolated func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
+
+    nonisolated func stream(
+        _ stream: SCStream,
+        didOutputSampleBuffer sampleBuffer: CMSampleBuffer,
+        of type: SCStreamOutputType
+    ) {
         guard type == .audio else { return }
 
-        guard let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else { return }
+        // Update keep-alive atomic timestamp
+        lastBufferTimestamp.withLock { $0 = CFAbsoluteTimeGetCurrent() }
 
-        var length = 0
-        var dataPointer: UnsafeMutablePointer<Int8>?
-        CMBlockBufferGetDataPointer(blockBuffer, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &length, dataPointerOut: &dataPointer)
+        // Extract audio buffer list with retained block buffer (zero-copy from CMSampleBuffer)
+        var audioBufferList = AudioBufferList()
+        var blockBuffer: CMBlockBuffer?
+        let status = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
+            sampleBuffer,
+            bufferListSizeNeededOut: nil,
+            bufferListOut: &audioBufferList,
+            bufferListSize: MemoryLayout<AudioBufferList>.size,
+            blockBufferAllocator: nil,
+            blockBufferMemoryAllocator: nil,
+            flags: kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment,
+            blockBufferOut: &blockBuffer
+        )
 
-        guard let pointer = dataPointer else { return }
-
-        let sampleCount = length / MemoryLayout<Float32>.size
-        let floatPointer = pointer.withMemoryRebound(to: Float32.self, capacity: sampleCount) { $0 }
-
-        // Determine actual sample rate from the sample buffer format description
-        var actualSampleRate: Double = 48000.0
-        if let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer) {
-            if let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc) {
-                actualSampleRate = asbd.pointee.mSampleRate
-            }
+        guard status == noErr else {
+            AppLogger.audioError("CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer failed: \(status)")
+            return
         }
 
-        processingQueue.async {
-            let samples: [Float]
+        // Read format description for actual sample rate and channel layout
+        var actualSampleRate: Double = 48000.0
+        var channelCount: UInt32 = 1
+        if let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer),
+           let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc) {
+            actualSampleRate = asbd.pointee.mSampleRate
+            channelCount = asbd.pointee.mChannelsPerFrame
+        }
 
-            if abs(actualSampleRate - Constants.whisperSampleRate) < 1.0 {
-                // Already at correct sample rate
-                samples = Array(UnsafeBufferPointer(start: floatPointer, count: sampleCount))
+        // Extract raw float pointer from the first audio buffer
+        let audioBuffer = audioBufferList.mBuffers
+        guard let rawData = audioBuffer.mData else { return }
+        let totalSamples = Int(audioBuffer.mDataByteSize) / MemoryLayout<Float32>.size
+        let floatPointer = rawData.assumingMemoryBound(to: Float32.self)
+
+        // Mono downmix if needed: compute per-frame sample count
+        let framesPerChannel = channelCount > 0 ? totalSamples / Int(channelCount) : totalSamples
+
+        audioPipelineQueue.async { [weak self] in
+            guard let self else { return }
+
+            // Step 1: Mono downmix (if multi-channel)
+            var monoSamples: [Float]
+            if channelCount > 1 {
+                monoSamples = [Float](repeating: 0, count: framesPerChannel)
+                for ch in 0..<Int(channelCount) {
+                    for i in 0..<framesPerChannel {
+                        monoSamples[i] += floatPointer[i * Int(channelCount) + ch]
+                    }
+                }
+                var divisor = Float(channelCount)
+                vDSP_vsdiv(monoSamples, 1, &divisor, &monoSamples, 1, vDSP_Length(framesPerChannel))
             } else {
-                // Use AVAudioConverter for high-quality resampling with anti-aliasing
-                guard let srcFormat = AVAudioFormat(
-                    commonFormat: .pcmFormatFloat32,
-                    sampleRate: actualSampleRate,
-                    channels: 1,
-                    interleaved: false
-                ), let dstFormat = AVAudioFormat(
-                    commonFormat: .pcmFormatFloat32,
-                    sampleRate: Constants.whisperSampleRate,
-                    channels: Constants.whisperChannelCount,
-                    interleaved: false
-                ) else {
-                    samples = Array(UnsafeBufferPointer(start: floatPointer, count: sampleCount))
-                    return
-                }
-
-                guard let srcBuffer = AVAudioPCMBuffer(pcmFormat: srcFormat, frameCapacity: AVAudioFrameCount(sampleCount)),
-                      let converter = AVAudioConverter(from: srcFormat, to: dstFormat) else {
-                    samples = Array(UnsafeBufferPointer(start: floatPointer, count: sampleCount))
-                    return
-                }
-
-                srcBuffer.frameLength = AVAudioFrameCount(sampleCount)
-                if let channelData = srcBuffer.floatChannelData {
-                    for i in 0..<sampleCount { channelData[0][i] = floatPointer[i] }
-                }
-
-                let outFrameCapacity = AVAudioFrameCount(Double(sampleCount) * (Constants.whisperSampleRate / actualSampleRate) + 1)
-                guard let dstBuffer = AVAudioPCMBuffer(pcmFormat: dstFormat, frameCapacity: outFrameCapacity) else {
-                    samples = Array(UnsafeBufferPointer(start: floatPointer, count: sampleCount))
-                    return
-                }
-
-                var convError: NSError?
-                let status = converter.convert(to: dstBuffer, error: &convError) { _, outStatus in
-                    outStatus.pointee = .haveData
-                    return srcBuffer
-                }
-
-                if status == .haveData, let channelData = dstBuffer.floatChannelData {
-                    samples = Array(UnsafeBufferPointer(start: channelData[0], count: Int(dstBuffer.frameLength)))
-                } else {
-                    samples = Array(UnsafeBufferPointer(start: floatPointer, count: sampleCount))
-                }
+                monoSamples = Array(UnsafeBufferPointer(start: floatPointer, count: totalSamples))
             }
 
-            // Write to file
+            // Step 2: Resample to 16kHz if needed using vDSP
+            let samples: [Float]
+            if abs(actualSampleRate - Constants.whisperSampleRate) < 1.0 {
+                samples = monoSamples
+            } else {
+                let ratio = Constants.whisperSampleRate / actualSampleRate
+                let outputLength = Int(Double(monoSamples.count) * ratio)
+                guard outputLength > 0 else { return }
+
+                var output = [Float](repeating: 0, count: outputLength)
+                // Use vDSP linear interpolation for resampling
+                var control = (0..<outputLength).map { Float(Double($0) / ratio) }
+                vDSP_vlint(monoSamples, &control, 1, &output, 1, vDSP_Length(outputLength), vDSP_Length(monoSamples.count))
+                samples = output
+            }
+
+            // Step 3: Write to file
             if let audioFile = self.audioFile {
                 let pcmFormat = audioFile.processingFormat
                 if let buffer = AVAudioPCMBuffer(pcmFormat: pcmFormat, frameCapacity: AVAudioFrameCount(samples.count)) {
                     buffer.frameLength = buffer.frameCapacity
-                    for i in 0..<samples.count {
-                        buffer.floatChannelData?[0][i] = samples[i]
+                    if let channelData = buffer.floatChannelData {
+                        samples.withUnsafeBufferPointer { src in
+                            channelData[0].update(from: src.baseAddress!, count: samples.count)
+                        }
                     }
                     try? audioFile.write(from: buffer)
                 }
             }
 
+            // Step 4: Accumulate for WhisperKit
             self.accumulatedSamples.append(contentsOf: samples)
 
-            if let first = samples.first {
+            // Step 5: RMS for waveform visualization
+            if !samples.isEmpty {
+                var meanSquare: Float = 0
+                vDSP_measqv(samples, 1, &meanSquare, vDSP_Length(samples.count))
+                let rms = min(sqrt(meanSquare) * 5.0, 1.0)
                 DispatchQueue.main.async {
                     self.audioLevels.removeFirst()
-                    self.audioLevels.append(abs(first))
+                    self.audioLevels.append(rms)
                 }
             }
         }
     }
 
     nonisolated func stream(_ stream: SCStream, didStopWithError error: Error) {
-        Task { @MainActor in
-            AppLogger.error("Стрім зупинено з помилкою", error: error)
+        AppLogger.streamWatchdogError("SCStream stopped with error", error: error)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.errorMessage = "Stream error: \(error.localizedDescription)"
+            self.attemptStreamReconnection()
         }
+    }
+}
+
+// MARK: - Keep-Alive Watchdog & Memory Pressure
+extension AudioManager {
+
+    /// Start a high-precision timer that checks for stream stalls every 5 seconds.
+    fileprivate func startKeepAliveMonitor(stream: SCStream, configuration: SCStreamConfiguration) {
+        stopKeepAliveMonitor()
+
+        let timer = DispatchSource.makeTimerSource(queue: audioPipelineQueue)
+        timer.schedule(
+            deadline: .now() + Constants.keepAliveIntervalSeconds,
+            repeating: Constants.keepAliveIntervalSeconds,
+            leeway: .milliseconds(100)
+        )
+        timer.setEventHandler { [weak self] in
+            guard let self, self.isRecording else { return }
+            let lastTime = self.lastBufferTimestamp.withLock { $0 }
+            let elapsed = CFAbsoluteTimeGetCurrent() - lastTime
+
+            if elapsed > Constants.streamStallThresholdSeconds {
+                AppLogger.streamWatchdog(
+                    "Stream stall detected: \(String(format: "%.1f", elapsed))s since last buffer. Refreshing configuration."
+                )
+                Task { [weak self] in
+                    guard let self, let stream = self.scStream else { return }
+                    do {
+                        try await stream.updateConfiguration(configuration)
+                        AppLogger.streamWatchdog("Configuration refresh successful.")
+                    } catch {
+                        AppLogger.streamWatchdogError("Configuration refresh failed", error: error)
+                    }
+                }
+            }
+        }
+        timer.resume()
+        keepAliveTimer = timer
+        AppLogger.streamWatchdog("Keep-alive monitor started (interval: \(Constants.keepAliveIntervalSeconds)s)")
+    }
+
+    fileprivate func stopKeepAliveMonitor() {
+        keepAliveTimer?.cancel()
+        keepAliveTimer = nil
+    }
+
+    /// Exponential backoff reconnection for SCStream errors (up to 3 retries).
+    fileprivate func attemptStreamReconnection() {
+        guard reconnectionRetryCount < Constants.maxStreamReconnectionRetries else {
+            AppLogger.streamWatchdogError("Max reconnection retries (\(Constants.maxStreamReconnectionRetries)) exhausted.")
+            return
+        }
+
+        reconnectionRetryCount += 1
+        let delay = Constants.reconnectionBaseDelaySeconds * pow(2.0, Double(reconnectionRetryCount - 1))
+        AppLogger.streamWatchdog(
+            "Scheduling reconnection attempt \(reconnectionRetryCount)/\(Constants.maxStreamReconnectionRetries) in \(delay)s"
+        )
+
+        Task {
+            try? await Task.sleep(for: .seconds(delay))
+            guard self.isRecording else { return }
+
+            try? await self.scStream?.stopCapture()
+            self.scStream = nil
+            self.stopKeepAliveMonitor()
+
+            do {
+                try await self.startSystemAudioRecording(
+                    fileURL: self.currentRecordingURL,
+                    ownsRecordingState: false
+                )
+                AppLogger.streamWatchdog("Reconnection attempt \(self.reconnectionRetryCount) succeeded.")
+            } catch {
+                AppLogger.streamWatchdogError("Reconnection attempt \(self.reconnectionRetryCount) failed", error: error)
+                self.attemptStreamReconnection()
+            }
+        }
+    }
+
+    /// Monitor OS memory pressure. On `.critical`, invoke the model-unloading callback.
+    fileprivate func startMemoryPressureMonitoring() {
+        stopMemoryPressureMonitoring()
+
+        let source = DispatchSource.makeMemoryPressureSource(
+            eventMask: [.warning, .critical],
+            queue: .global(qos: .utility)
+        )
+        source.setEventHandler { [weak self] in
+            let event = source.data
+            if event.contains(.critical) {
+                AppLogger.systemHealth("CRITICAL memory pressure — triggering model unload.")
+                self?.onCriticalMemoryPressure?()
+            } else if event.contains(.warning) {
+                AppLogger.systemHealth("WARNING memory pressure detected.")
+            }
+        }
+        source.resume()
+        memoryPressureSource = source
+    }
+
+    fileprivate func stopMemoryPressureMonitoring() {
+        memoryPressureSource?.cancel()
+        memoryPressureSource = nil
     }
 }
 
