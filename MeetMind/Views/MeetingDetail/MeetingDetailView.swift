@@ -159,6 +159,7 @@ struct MeetingDetailView: View {
                     translationMenu
                 }
                 .font(Theme.Typography.caption)
+                .fixedSize(horizontal: true, vertical: false)
             }
             
             // Tags

@@ -41,3 +41,7 @@ Export*/
 
 # Local overrides (user-specific build / export caches)
 .DS_Store
+
+# MemPalace per-project files (issue #185)
+mempalace.yaml
+entities.json
