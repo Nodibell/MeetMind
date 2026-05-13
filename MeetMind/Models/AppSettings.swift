@@ -27,8 +27,9 @@ final class AppSettings: @unchecked Sendable {
         static let preferredSystemAudioSourceID = "preferredSystemAudioSourceID"
         static let defaultLanguage          = "defaultLanguage"
         static let summaryLanguage          = "summaryLanguage"
-        static let ollamaModel              = "ollamaModel"
-        static let ollamaEndpoint           = "ollamaEndpoint"
+        static let llmProvider              = "llmProvider"
+        static let llmModel                 = "llmModel"
+        static let llmEndpoint              = "llmEndpoint"
         static let customSummaryPrompt      = "customSummaryPrompt"
         static let whisperModelLive         = "whisperModelLive"
         static let whisperModelPost         = "whisperModelPost"
@@ -85,14 +86,22 @@ final class AppSettings: @unchecked Sendable {
         didSet { UserDefaults.standard.set(summaryLanguage, forKey: Keys.summaryLanguage) }
     }
 
-    // MARK: - Ollama
-
-    var ollamaModel: String {
-        didSet { UserDefaults.standard.set(ollamaModel, forKey: Keys.ollamaModel) }
+    enum LLMProvider: String, CaseIterable, Identifiable, Codable, Sendable {
+        case ollama = "Ollama"
+        case lmStudio = "LM Studio"
+        var id: String { rawValue }
     }
 
-    var ollamaEndpoint: String {
-        didSet { UserDefaults.standard.set(ollamaEndpoint, forKey: Keys.ollamaEndpoint) }
+    var llmProvider: LLMProvider {
+        didSet { UserDefaults.standard.set(llmProvider.rawValue, forKey: Keys.llmProvider) }
+    }
+
+    var llmModel: String {
+        didSet { UserDefaults.standard.set(llmModel, forKey: Keys.llmModel) }
+    }
+
+    var llmEndpoint: String {
+        didSet { UserDefaults.standard.set(llmEndpoint, forKey: Keys.llmEndpoint) }
     }
 
     var customSummaryPrompt: String {
@@ -136,10 +145,18 @@ final class AppSettings: @unchecked Sendable {
         preferredInputDevice    = UserDefaults.standard.string(forKey: Keys.preferredInputDevice)
         defaultLanguage         = UserDefaults.standard.string(forKey: Keys.defaultLanguage) ?? Constants.defaultLanguage
         summaryLanguage         = UserDefaults.standard.string(forKey: Keys.summaryLanguage) ?? "auto"
-        ollamaModel             = UserDefaults.standard.string(forKey: Keys.ollamaModel) ?? Constants.defaultOllamaModel
-        ollamaEndpoint          = UserDefaults.standard.string(forKey: Keys.ollamaEndpoint) ?? Constants.defaultOllamaEndpoint
-        customSummaryPrompt     = UserDefaults.standard.string(forKey: Keys.customSummaryPrompt) ?? ""
         appLanguage             = UserDefaults.standard.string(forKey: Keys.appLanguage) ?? "uk"
+        
+        // --- LLM Settings ---
+        if let providerStr = UserDefaults.standard.string(forKey: Keys.llmProvider),
+           let provider = LLMProvider(rawValue: providerStr) {
+            llmProvider = provider
+        } else {
+            llmProvider = .ollama
+        }
+        llmModel                = UserDefaults.standard.string(forKey: Keys.llmModel) ?? UserDefaults.standard.string(forKey: "ollamaModel") ?? Constants.defaultOllamaModel
+        llmEndpoint             = UserDefaults.standard.string(forKey: Keys.llmEndpoint) ?? UserDefaults.standard.string(forKey: "ollamaEndpoint") ?? Constants.defaultOllamaEndpoint
+        customSummaryPrompt     = UserDefaults.standard.string(forKey: Keys.customSummaryPrompt) ?? ""
 
         // --- Whisper models (with legacy name migration) ---
         let liveRaw = UserDefaults.standard.string(forKey: Keys.whisperModelLive) ?? Constants.liveTranscriptionModel

@@ -79,9 +79,31 @@ actor LLMService {
         }
     }
     
+    // MARK: - OpenAI / LM Studio Models
+    
+    private struct OpenAITagsResponse: Decodable {
+        let data: [ModelInfo]
+        
+        struct ModelInfo: Decodable {
+            let id: String
+        }
+    }
+    
+    private struct OpenAIChatStreamResponse: Decodable {
+        let choices: [Choice]?
+        
+        struct Choice: Decodable {
+            let delta: Delta?
+        }
+        
+        struct Delta: Decodable {
+            let content: String?
+        }
+    }
+    
     // MARK: - Health Check
     
-    /// Check if Ollama is running and list available models
+    /// Check if LLM server is running and list available models
     func checkHealth() async -> Bool {
         // Return cached result if still fresh
         if let lastCheck = lastHealthCheckDate,
@@ -92,30 +114,40 @@ actor LLMService {
 
         updateState(.checking)
         
-        let endpoint = AppSettings.shared.ollamaEndpoint
-        guard let url = URL(string: "\(endpoint)\(Constants.ollamaHealthPath)") else {
-            updateState(.unavailable(reason: "Невірна URL-адреса Ollama"))
+        let provider = AppSettings.shared.llmProvider
+        let endpoint = AppSettings.shared.llmEndpoint
+        let path = provider == .lmStudio ? Constants.openaiHealthPath : Constants.ollamaHealthPath
+        
+        guard let url = URL(string: "\(endpoint)\(path)") else {
+            updateState(.unavailable(reason: "Невірна URL-адреса"))
             return false
         }
         
         do {
             let (data, response) = try await URLSession.shared.data(from: url)
-            AppLogger.debug("Отримано відповідь від Ollama")
             
             guard let httpResponse = response as? HTTPURLResponse,
                   httpResponse.statusCode == 200 else {
-                updateState(.unavailable(reason: "Ollama не відповідає (HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0))"))
+                updateState(.unavailable(reason: "Сервер не відповідає (HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0))"))
                 return false
             }
             
-            let tagsResponse = try JSONDecoder().decode(TagsResponse.self, from: data)
-            let modelNames = tagsResponse.models.map(\.name)
+            var modelNames: [String] = []
+            
+            if provider == .lmStudio {
+                let tagsResponse = try JSONDecoder().decode(OpenAITagsResponse.self, from: data)
+                modelNames = tagsResponse.data.map(\.id)
+            } else {
+                let tagsResponse = try JSONDecoder().decode(TagsResponse.self, from: data)
+                modelNames = tagsResponse.models.map(\.name)
+            }
 
             lastHealthCheckDate = Date()
             updateState(.available(models: modelNames))
             return true
         } catch let error as URLError where error.code == .cannotConnectToHost {
-            updateState(.unavailable(reason: "Ollama не запущено. Виконайте 'ollama serve' у терміналі."))
+            let msg = provider == .lmStudio ? "LM Studio не запущено." : "Ollama не запущено."
+            updateState(.unavailable(reason: msg))
             return false
         } catch {
             updateState(.unavailable(reason: "Помилка з'єднання: \(error.localizedDescription)"))
@@ -128,10 +160,10 @@ actor LLMService {
     /// Generate meeting summary from transcript text
     func generateSummary(transcript: String, targetLanguage: String? = nil) async throws -> String {
         AppLogger.info("Запит на генерацію резюме (довжина: \(transcript.count) симв., мова: \(targetLanguage ?? "auto"))")
-        let model = AppSettings.shared.ollamaModel
-        let endpoint = AppSettings.shared.ollamaEndpoint
+        let model = AppSettings.shared.llmModel
+        let endpoint = AppSettings.shared.llmEndpoint
         
-        // Check if Ollama is available
+        // Check if Server is available
         let isAvailable = await checkHealth()
         guard isAvailable else {
             throw LLMError.ollamaNotRunning
@@ -173,8 +205,8 @@ actor LLMService {
     /// Generate a short, relevant title for the meeting based on the transcript
     func generateTitle(transcript: String) async throws -> String {
         AppLogger.info("Запит на генерацію назви наради")
-        let model = AppSettings.shared.ollamaModel
-        let endpoint = AppSettings.shared.ollamaEndpoint
+        let model = AppSettings.shared.llmModel
+        let endpoint = AppSettings.shared.llmEndpoint
         
         let prompt = """
         Напиши КОРОТКУ, інформативну назву для цієї наради на основі транскрипту (максимум 5-6 слів).
@@ -200,8 +232,8 @@ actor LLMService {
     /// Answer a user question based on the transcript
     func answerQuestion(transcript: String, question: String, history: [ChatMessage] = []) async throws -> String {
         AppLogger.info("Запит на відповідь на питання")
-        let model = AppSettings.shared.ollamaModel
-        let endpoint = AppSettings.shared.ollamaEndpoint
+        let model = AppSettings.shared.llmModel
+        let endpoint = AppSettings.shared.llmEndpoint
         
         let systemPrompt = """
         Ти — асистент для аналізу нарад. Відповідай на питання користувача базуючись ТІЛЬКИ на наданому транскрипті.
@@ -225,8 +257,8 @@ actor LLMService {
     /// Translate transcript or summary
     func translateText(text: String, to languageName: String) async throws -> String {
         AppLogger.info("Запит на переклад тексту на \(languageName)")
-        let model = AppSettings.shared.ollamaModel
-        let endpoint = AppSettings.shared.ollamaEndpoint
+        let model = AppSettings.shared.llmModel
+        let endpoint = AppSettings.shared.llmEndpoint
         
         let prompt = """
         Переклади наступний текст на таку мову: \(languageName).
@@ -257,15 +289,18 @@ actor LLMService {
                         ChatMessage(role: "user", content: prompt)
                     ]
                     
+                    let provider = AppSettings.shared.llmProvider
                     let request = ChatRequest(
-                        model: AppSettings.shared.ollamaModel,
+                        model: AppSettings.shared.llmModel,
                         messages: messages,
                         stream: true,
                         options: .init(temperature: 0.7, num_predict: 2048, top_p: 0.9)
                     )
                     
-                    let endpoint = AppSettings.shared.ollamaEndpoint
-                    guard let url = URL(string: "\(endpoint)/api/chat") else {
+                    let endpoint = AppSettings.shared.llmEndpoint
+                    let path = provider == .lmStudio ? Constants.openaiChatPath : Constants.ollamaChatPath
+                    
+                    guard let url = URL(string: "\(endpoint)\(path)") else {
                         continuation.finish(throwing: URLError(.badURL))
                         return
                     }
@@ -280,14 +315,11 @@ actor LLMService {
                     let (stream, _) = try await URLSession.shared.bytes(for: urlRequest)
                     
                     for try await line in stream.lines {
-                        guard let data = line.data(using: .utf8) else { continue }
-                        let decoded = try JSONDecoder().decode(ChatStreamResponse.self, from: data)
-                        
-                        if let content = decoded.message?.content {
+                        let parsedContent = try parseStreamLine(line, provider: provider)
+                        if let content = parsedContent.content {
                             continuation.yield(content)
                         }
-                        
-                        if decoded.done {
+                        if parsedContent.isDone {
                             break
                         }
                     }
@@ -362,7 +394,10 @@ actor LLMService {
     // MARK: - Chat Request with Streaming
     
     private func sendChatRequest(model: String, endpoint: String, messages: [ChatMessage]) async throws -> String {
-        guard let url = URL(string: "\(endpoint)\(Constants.ollamaChatPath)") else {
+        let provider = AppSettings.shared.llmProvider
+        let path = provider == .lmStudio ? Constants.openaiChatPath : Constants.ollamaChatPath
+        
+        guard let url = URL(string: "\(endpoint)\(path)") else {
             throw LLMError.invalidEndpoint
         }
         
@@ -380,7 +415,7 @@ actor LLMService {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = Constants.ollamaRequestTimeout
+        request.timeoutInterval = Constants.llmRequestTimeout
         request.httpBody = try JSONEncoder().encode(requestBody)
         
         updateState(.generating)
@@ -396,21 +431,16 @@ actor LLMService {
             }
             
             for try await line in bytes.lines {
-                guard let data = line.data(using: .utf8) else { continue }
-                
                 do {
-                    let streamResponse = try JSONDecoder().decode(ChatStreamResponse.self, from: data)
-                    
-                    if let content = streamResponse.message?.content {
+                    let parsed = try parseStreamLine(line, provider: provider)
+                    if let content = parsed.content {
                         fullResponse += content
                         onTokenReceived?(content)
                     }
-                    
-                    if streamResponse.done {
+                    if parsed.isDone {
                         break
                     }
                 } catch {
-                    // Skip malformed lines
                     continue
                 }
             }
@@ -482,6 +512,26 @@ actor LLMService {
     }
     
     // MARK: - Helpers
+    
+    private func parseStreamLine(_ line: String, provider: AppSettings.LLMProvider) throws -> (content: String?, isDone: Bool) {
+        if provider == .lmStudio {
+            // OpenAI Format: `data: {...}`
+            guard line.hasPrefix("data: ") else { return (nil, false) }
+            let jsonString = String(line.dropFirst(6))
+            if jsonString.trimmingCharacters(in: .whitespacesAndNewlines) == "[DONE]" {
+                return (nil, true)
+            }
+            guard let data = jsonString.data(using: .utf8) else { return (nil, false) }
+            let decoded = try JSONDecoder().decode(OpenAIChatStreamResponse.self, from: data)
+            let content = decoded.choices?.first?.delta?.content
+            return (content, false)
+        } else {
+            // Ollama Format
+            guard let data = line.data(using: .utf8) else { return (nil, false) }
+            let decoded = try JSONDecoder().decode(ChatStreamResponse.self, from: data)
+            return (decoded.message?.content, decoded.done)
+        }
+    }
     
     private func updateState(_ newState: ServiceState) {
         state = newState

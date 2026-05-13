@@ -50,13 +50,19 @@ enum Constants {
     nonisolated static let postProcessingModel = "large-v3"
     nonisolated static let defaultLanguage = "uk"
     
-    // MARK: - Ollama
+    // MARK: - LLM Settings
     nonisolated static let defaultOllamaEndpoint = "http://localhost:11434"
     nonisolated static let defaultOllamaModel = "gemma3:12b"
+    nonisolated static let defaultLMStudioEndpoint = "http://localhost:1234"
+    nonisolated static let defaultLMStudioModel = "local-model"
+    
     nonisolated static let ollamaHealthPath = "/api/tags"
     nonisolated static let ollamaChatPath = "/api/chat"
-    nonisolated static let ollamaGeneratePath = "/api/generate"
-    nonisolated static let ollamaRequestTimeout: TimeInterval = 120
+    
+    nonisolated static let openaiHealthPath = "/v1/models"
+    nonisolated static let openaiChatPath = "/v1/chat/completions"
+    
+    nonisolated static let llmRequestTimeout: TimeInterval = 120
     nonisolated static let maxTokensPerChunk = 4000
     
     // MARK: - Supported Audio Formats

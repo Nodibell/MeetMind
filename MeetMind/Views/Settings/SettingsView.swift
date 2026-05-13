@@ -126,8 +126,17 @@ struct SettingsView: View {
 
     private var ollamaTab: some View {
         Form {
+            Section("Провайдер") {
+                Picker("Сервіс", selection: $viewModel.settings.llmProvider) {
+                    ForEach(AppSettings.LLMProvider.allCases) { provider in
+                        Text(provider.rawValue).tag(provider)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
             Section("Підключення") {
-                TextField("Endpoint", text: $viewModel.settings.ollamaEndpoint)
+                TextField("Endpoint", text: $viewModel.settings.llmEndpoint)
 
                 HStack {
                     statusIndicator
@@ -139,22 +148,34 @@ struct SettingsView: View {
                     }
                     .disabled(viewModel.isCheckingOllama)
                 }
+                
+                if viewModel.settings.llmProvider == .lmStudio {
+                    Text("Для LM Studio вкажіть адресу локального сервера (напр. http://localhost:1234/v1)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Для Ollama вкажіть адресу сервера (напр. http://localhost:11434)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("Модель") {
                 if viewModel.availableModels.isEmpty {
-                    TextField("Модель", text: $viewModel.settings.ollamaModel)
+                    TextField("Модель", text: $viewModel.settings.llmModel)
                 } else {
-                    Picker("Модель", selection: $viewModel.settings.ollamaModel) {
+                    Picker("Модель", selection: $viewModel.settings.llmModel) {
                         ForEach(viewModel.availableModels, id: \.self) { model in
                             Text(model).tag(model)
                         }
                     }
                 }
 
-                Text("Рекомендовані: gemma3:12b, qwen2.5:14b (підтримують українську)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if viewModel.settings.llmProvider == .ollama {
+                    Text("Рекомендовані: gemma3:12b, qwen2.5:14b (підтримують українську)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("Додатковий Промпт для Резюме") {
