@@ -15,6 +15,7 @@ struct ActionItemsView: View {
     @Query private var meetings: [Meeting]
     @State private var actionItems: [ActionItem] = []
     @State private var isLoading = true
+    @State private var hideCompleted = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -23,13 +24,20 @@ struct ActionItemsView: View {
             if isLoading {
                 ProgressView("Пошук завдань...")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if actionItems.isEmpty {
+            } else if filteredItems.isEmpty {
                 emptyState
             } else {
                 List {
-                    ForEach(actionItems) { item in
+                    ForEach(filteredItems) { item in
                         ActionItemRow(item: item) {
                             toggleTask(item)
+                        }
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                deleteTask(item)
+                            } label: {
+                                Label("Видалити", systemImage: "trash")
+                            }
                         }
                     }
                 }
@@ -56,14 +64,65 @@ struct ActionItemsView: View {
             
             Spacer()
             
-            Button(action: loadActionItems) {
-                Label("Оновити", systemImage: "arrow.clockwise")
+            HStack(spacing: Theme.Spacing.md) {
+                Button(action: { hideCompleted.toggle() }) {
+                    Label(hideCompleted ? "Показати виконані" : "Приховати виконані", 
+                          systemImage: hideCompleted ? "eye" : "eye.slash")
+                }
+                .buttonStyle(.bordered)
+                .foregroundStyle(hideCompleted ? Theme.Colors.accentPrimary : Theme.Colors.textSecondary)
+                
+                Button(action: loadActionItems) {
+                    Label("Оновити", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
             }
-            .buttonStyle(.bordered)
         }
         .padding(.horizontal, Theme.Spacing.xxl)
         .padding(.vertical, Theme.Spacing.xl)
         .background(Theme.Colors.backgroundSecondary.opacity(0.5))
+    }
+    
+    private var filteredItems: [ActionItem] {
+        if hideCompleted {
+            return actionItems.filter { !$0.isCompleted }
+        }
+        return actionItems
+    }
+    
+    private func deleteTask(_ item: ActionItem) {
+        // Find the meeting
+        guard let meeting = meetings.first(where: { $0.id == item.meetingID }),
+              let path = meeting.summaryPath else { return }
+        
+        do {
+            let url = URL(fileURLWithPath: path)
+            let summary = try String(contentsOf: url)
+            
+            let lines = summary.components(separatedBy: .newlines)
+            var newLines: [String] = []
+            var found = false
+            
+            let targetCheck = item.isCompleted ? "- [x]" : "- [ ]"
+            
+            for line in lines {
+                if !found && line.contains(targetCheck) && line.contains(item.text) {
+                    found = true
+                    // Skip this line
+                } else {
+                    newLines.append(line)
+                }
+            }
+            
+            let newSummary = newLines.joined(separator: "\n")
+            try newSummary.write(to: url, atomically: true, encoding: .utf8)
+            
+            // Refresh UI
+            loadActionItems()
+            
+        } catch {
+            AppLogger.error("Failed to delete task", error: error)
+        }
     }
     
     private func loadActionItems() {

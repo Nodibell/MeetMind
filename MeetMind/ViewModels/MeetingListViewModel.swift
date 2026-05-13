@@ -12,7 +12,15 @@ import SwiftData
 @Observable
 final class MeetingListViewModel {
     
+    enum SortOption: String, CaseIterable, Identifiable {
+        case date = "За датою"
+        case title = "За назвою"
+        case duration = "За тривалістю"
+        var id: String { rawValue }
+    }
+    
     var searchText: String = ""
+    var sortOption: SortOption = .date
     var errorMessage: String?
     
     private var modelContext: ModelContext?

@@ -53,6 +53,7 @@ final class Meeting {
     @Attribute var statusRaw: String
     var isExportedToObsidian: Bool
     var errorMessage: String?
+    var speakerMetadata: [SpeakerMetadata] = []
     
     var status: MeetingStatus {
         get { MeetingStatus(rawValue: statusRaw) ?? .error }

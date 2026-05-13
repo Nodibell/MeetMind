@@ -511,6 +511,39 @@ actor LLMService {
         """
     }
     
+    /// Extract speaker names from transcript if they were mentioned
+    func extractSpeakerNames(transcript: String) async throws -> [String: String] {
+        AppLogger.info("Запит на витягнення імен спікерів")
+        let model = AppSettings.shared.llmModel
+        let endpoint = AppSettings.shared.llmEndpoint
+        
+        let prompt = """
+        Проаналізуй транскрипт та спробуй визначити імена спікерів, якщо вони згадувалися або зверталися один до одного.
+        Поверни результат ТІЛЬКИ у форматі JSON: {"Speaker ID": "Ім'я"}.
+        Якщо ім'я невідоме, не додавай його до списку.
+        
+        Транскрипт:
+        \(String(transcript.prefix(5000)))
+        """
+        
+        let result = try await sendChatRequest(
+            model: model,
+            endpoint: endpoint,
+            messages: [
+                ChatMessage(role: "system", content: "Ти асистент, що витягує імена людей з тексту. Відповідай ТІЛЬКИ чистим JSON."),
+                ChatMessage(role: "user", content: prompt)
+            ]
+        )
+        
+        // Clean result from markdown code blocks
+        let cleanJSON = result.replacingOccurrences(of: "```json", with: "")
+                              .replacingOccurrences(of: "```", with: "")
+                              .trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        guard let data = cleanJSON.data(using: .utf8) else { return [:] }
+        return (try? JSONDecoder().decode([String: String].self, from: data)) ?? [:]
+    }
+    
     // MARK: - Helpers
     
     private func parseStreamLine(_ line: String, provider: AppSettings.LLMProvider) throws -> (content: String?, isDone: Bool) {

@@ -48,11 +48,18 @@ struct MeetingDetailView: View {
                 TranscriptPanelView(
                     segments: viewModel.filteredSegments,
                     searchText: $viewModel.searchText,
+                    speakerMetadata: viewModel.meeting.speakerMetadata,
                     isLoading: viewModel.isLoadingTranscript,
                     translatedText: viewModel.translatedTranscript,
                     isTranslating: viewModel.isTranslatingTranscript,
                     onClearTranslation: {
                         viewModel.translatedTranscript = nil
+                    },
+                    onUpdateSpeakerName: { id, name in
+                        viewModel.updateSpeakerName(id: id, newName: name)
+                    },
+                    onUpdateSpeakerColor: { id, color in
+                        viewModel.updateSpeakerColor(id: id, color: color)
                     }
                 )
                 .frame(minWidth: 300)
@@ -61,7 +68,7 @@ struct MeetingDetailView: View {
                     SummaryPanelView(
                         summary: viewModel.summary,
                         streamingSummary: viewModel.streamingSummary,
-                        selectedLanguage: Bindable(viewModel).selectedSummaryLanguage,
+                        selectedLanguage: $viewModel.selectedSummaryLanguage,
                         isGenerating: viewModel.isRegeneratingSummary,
                         onRegenerate: {
                             Task { await viewModel.regenerateSummary() }

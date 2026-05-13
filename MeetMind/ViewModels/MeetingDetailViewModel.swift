@@ -8,6 +8,7 @@
 import Foundation
 import SwiftData
 import AppKit
+import SwiftUI
 
 /// ViewModel for viewing and managing a completed meeting
 @Observable
@@ -63,6 +64,11 @@ final class MeetingDetailViewModel {
     func loadData() async {
         await loadTranscript()
         await loadSummary()
+        
+        // Auto-detect names if not already set
+        if meeting.speakerMetadata.allSatisfy({ $0.name == nil }) {
+            await autoDetectSpeakerNames()
+        }
     }
     
     private func loadTranscript() async {
@@ -328,5 +334,41 @@ final class MeetingDetailViewModel {
     func removeTag(_ tag: String) {
         meeting.tags.removeAll { $0 == tag }
         try? modelContext?.save()
+    }
+    
+    // MARK: - Speaker Management
+    
+    func updateSpeakerName(id: String, newName: String) {
+        if let index = meeting.speakerMetadata.firstIndex(where: { $0.id == id }) {
+            meeting.speakerMetadata[index].name = newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : newName
+        } else {
+            meeting.speakerMetadata.append(SpeakerMetadata(id: id, name: newName, colorHex: nil))
+        }
+        try? modelContext?.save()
+    }
+    
+    func updateSpeakerColor(id: String, color: Color) {
+        let hex = color.toHex()
+        if let index = meeting.speakerMetadata.firstIndex(where: { $0.id == id }) {
+            meeting.speakerMetadata[index].colorHex = hex
+        } else {
+            meeting.speakerMetadata.append(SpeakerMetadata(id: id, name: nil, colorHex: hex))
+        }
+        try? modelContext?.save()
+    }
+    
+    func autoDetectSpeakerNames() async {
+        guard let transcriptText = transcript?.fullText, !transcriptText.isEmpty else { return }
+        
+        do {
+            let detected = try await llmService.extractSpeakerNames(transcript: transcriptText)
+            await MainActor.run {
+                for (id, name) in detected {
+                    self.updateSpeakerName(id: id, newName: name)
+                }
+            }
+        } catch {
+            AppLogger.error("Помилка автовизначення імен спікерів: \(error)")
+        }
     }
 }

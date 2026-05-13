@@ -82,6 +82,47 @@ struct MarkdownWebView: NSViewRepresentable {
                     margin-top: 0;
                     margin-bottom: 16px;
                 }
+                ul, ol {
+                    padding-left: 20px;
+                }
+                li {
+                    margin-bottom: 6px;
+                }
+                li::marker {
+                    color: var(--link-color);
+                    font-weight: bold;
+                }
+                
+                /* Checkbox styling */
+                input[type="checkbox"] {
+                    appearance: none;
+                    -webkit-appearance: none;
+                    width: 16px;
+                    height: 16px;
+                    border: 1.5px solid var(--border-color);
+                    border-radius: 4px;
+                    margin-right: 8px;
+                    vertical-align: middle;
+                    position: relative;
+                    cursor: pointer;
+                    background-color: var(--bg-color);
+                    transition: all 0.2s ease;
+                }
+                input[type="checkbox"]:checked {
+                    background-color: var(--link-color);
+                    border-color: var(--link-color);
+                }
+                input[type="checkbox"]:checked::after {
+                    content: "✓";
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    color: white;
+                    font-size: 10px;
+                    font-weight: bold;
+                }
+                
                 a { color: var(--link-color); text-decoration: none; }
                 a:hover { text-decoration: underline; }
                 code {

@@ -11,10 +11,13 @@ import SwiftUI
 struct TranscriptPanelView: View {
     let segments: [MeetingTranscriptSegment]
     @Binding var searchText: String
+    var speakerMetadata: [SpeakerMetadata] = []
     var isLoading: Bool = false
     var translatedText: String? = nil
     var isTranslating: Bool = false
     var onClearTranslation: (() -> Void)? = nil
+    var onUpdateSpeakerName: ((String, String) -> Void)? = nil
+    var onUpdateSpeakerColor: ((String, Color) -> Void)? = nil
     
     @State private var highlightedSegmentID: UUID?
     
@@ -105,7 +108,18 @@ struct TranscriptPanelView: View {
                         TranscriptDetailRow(
                             segment: segment,
                             isHighlighted: segment.id == highlightedSegmentID,
-                            searchText: searchText
+                            searchText: searchText,
+                            metadata: speakerMetadata.first(where: { $0.id == segment.speakerID }),
+                            onUpdateName: { newName in
+                                if let speakerID = segment.speakerID {
+                                    onUpdateSpeakerName?(speakerID, newName)
+                                }
+                            },
+                            onUpdateColor: { newColor in
+                                if let speakerID = segment.speakerID {
+                                    onUpdateSpeakerColor?(speakerID, newColor)
+                                }
+                            }
                         )
                         .id(segment.id)
                         .onTapGesture {
@@ -154,6 +168,12 @@ struct TranscriptDetailRow: View {
     let segment: MeetingTranscriptSegment
     var isHighlighted: Bool = false
     var searchText: String = ""
+    var metadata: SpeakerMetadata?
+    var onUpdateName: (String) -> Void
+    var onUpdateColor: (Color) -> Void
+    
+    @State private var isEditingSpeaker = false
+    @State private var newSpeakerName = ""
     
     var body: some View {
         HStack(alignment: .top, spacing: Theme.Spacing.md) {
@@ -172,18 +192,60 @@ struct TranscriptDetailRow: View {
             
             // Vertical line
             Rectangle()
-                .fill(isHighlighted ? Theme.Colors.accentPrimary : Theme.Colors.borderSubtle)
+                .fill(isHighlighted ? (metadata?.color ?? Theme.Colors.accentPrimary) : Theme.Colors.borderSubtle)
                 .frame(width: 2)
                 .clipShape(RoundedRectangle(cornerRadius: 1))
             
             // Text
             VStack(alignment: .leading, spacing: 4) {
-                if let speaker = segment.speakerID {
-                    Text(speaker.replacingOccurrences(of: "Speaker ", with: "Диктор "))
-                        .font(Theme.Typography.caption)
-                        .fontWeight(.bold)
-                        .foregroundStyle(Theme.Colors.accentPrimary)
-                        .padding(.bottom, 2)
+                if let speakerID = segment.speakerID {
+                    Button {
+                        newSpeakerName = metadata?.name ?? ""
+                        isEditingSpeaker = true
+                    } label: {
+                        Text(metadata?.displayName ?? speakerID.replacingOccurrences(of: "Speaker ", with: "Диктор "))
+                            .font(Theme.Typography.caption)
+                            .fontWeight(.bold)
+                            .foregroundStyle(metadata?.color ?? Theme.Colors.accentPrimary)
+                            .padding(.bottom, 2)
+                    }
+                    .buttonStyle(.plain)
+                    .popover(isPresented: $isEditingSpeaker) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Налаштування спікера")
+                                .font(.headline)
+                            
+                            TextField("Ім'я", text: $newSpeakerName)
+                                .textFieldStyle(.roundedBorder)
+                                .onSubmit {
+                                    onUpdateName(newSpeakerName)
+                                    isEditingSpeaker = false
+                                }
+                            
+                            ColorPicker("Колір", selection: Binding(
+                                get: { metadata?.color ?? Theme.Colors.accentPrimary },
+                                set: { onUpdateColor($0) }
+                            ))
+                            
+                            HStack {
+                                Button("Скинути") {
+                                    onUpdateName("")
+                                    isEditingSpeaker = false
+                                }
+                                .buttonStyle(.link)
+                                
+                                Spacer()
+                                
+                                Button("Зберегти") {
+                                    onUpdateName(newSpeakerName)
+                                    isEditingSpeaker = false
+                                }
+                                .buttonStyle(.borderedProminent)
+                            }
+                        }
+                        .padding()
+                        .frame(width: 250)
+                    }
                 }
                 
                 Text(segment.text)
@@ -195,6 +257,6 @@ struct TranscriptDetailRow: View {
         }
         .padding(.horizontal, Theme.Spacing.lg)
         .padding(.vertical, Theme.Spacing.sm)
-        .background(isHighlighted ? Theme.Colors.accentPrimary.opacity(0.08) : .clear)
+        .background(isHighlighted ? (metadata?.color.opacity(0.08) ?? Theme.Colors.accentPrimary.opacity(0.08)) : .clear)
     }
 }

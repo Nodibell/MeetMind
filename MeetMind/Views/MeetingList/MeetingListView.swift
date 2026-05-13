@@ -29,6 +29,21 @@ struct MeetingListView: View {
                 
                 Spacer()
                 
+                // Sort Menu
+                Menu {
+                    Picker("Сортування", selection: $viewModel.sortOption) {
+                        ForEach(MeetingListViewModel.SortOption.allCases) { option in
+                            Text(option.rawValue).tag(option)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "line.3.horizontal.decrease.circle")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.Colors.textSecondary)
+                }
+                .buttonStyle(.plain)
+                .help("Сортування")
+                
                 // New recording button
                 Button(action: onNewRecording) {
                     Image(systemName: "plus.circle.fill")
@@ -100,12 +115,25 @@ struct MeetingListView: View {
     // MARK: - Filtered Meetings
     
     private var filteredMeetings: [Meeting] {
+        let result: [Meeting]
         if viewModel.searchText.isEmpty {
-            return meetings
+            result = meetings
+        } else {
+            result = meetings.filter { meeting in
+                meeting.title.localizedCaseInsensitiveContains(viewModel.searchText) ||
+                meeting.tags.contains(where: { $0.localizedCaseInsensitiveContains(viewModel.searchText) })
+            }
         }
-        return meetings.filter { meeting in
-            meeting.title.localizedCaseInsensitiveContains(viewModel.searchText) ||
-            meeting.tags.contains(where: { $0.localizedCaseInsensitiveContains(viewModel.searchText) })
+        
+        return result.sorted { m1, m2 in
+            switch viewModel.sortOption {
+            case .date:
+                return m1.date > m2.date
+            case .title:
+                return m1.title.localizedCompare(m2.title) == .orderedAscending
+            case .duration:
+                return m1.duration > m2.duration
+            }
         }
     }
     
