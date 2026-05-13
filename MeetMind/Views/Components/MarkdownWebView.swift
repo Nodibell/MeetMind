@@ -93,6 +93,13 @@ struct MarkdownWebView: NSViewRepresentable {
                     font-weight: bold;
                 }
                 
+                /* Hide bullets for task lists */
+                li:has(input[type="checkbox"]) {
+                    list-style-type: none;
+                    padding-left: 0;
+                    margin-left: 0;
+                }
+                
                 /* Checkbox styling */
                 input[type="checkbox"] {
                     appearance: none;
@@ -104,6 +111,7 @@ struct MarkdownWebView: NSViewRepresentable {
                     margin-right: 8px;
                     vertical-align: middle;
                     position: relative;
+                    top: -1px;
                     cursor: pointer;
                     background-color: var(--bg-color);
                     transition: all 0.2s ease;

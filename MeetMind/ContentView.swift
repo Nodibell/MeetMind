@@ -63,6 +63,8 @@ struct ContentView: View {
             selectedMeetingID: $selectedMeetingID,
             viewModel: meetingListVM,
             onNewRecording: {
+                isShowingGlobalSearch = false
+                isShowingActionItems = false
                 isShowingRecording = true
                 selectedMeetingID = nil
                 recordingVM?.resetForNewRecording()
