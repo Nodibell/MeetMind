@@ -14,6 +14,7 @@ struct MeetingTranscriptSegment: Codable, Identifiable, Sendable, Equatable {
     let endTime: TimeInterval
     let text: String
     let speakerID: String?
+    let speakerName: String?
     let language: String?
     
     nonisolated init(
@@ -22,6 +23,7 @@ struct MeetingTranscriptSegment: Codable, Identifiable, Sendable, Equatable {
         endTime: TimeInterval,
         text: String,
         speakerID: String? = nil,
+        speakerName: String? = nil,
         language: String? = nil
     ) {
         self.id = id
@@ -29,6 +31,7 @@ struct MeetingTranscriptSegment: Codable, Identifiable, Sendable, Equatable {
         self.endTime = endTime
         self.text = text
         self.speakerID = speakerID
+        self.speakerName = speakerName
         self.language = language
     }
     
@@ -40,6 +43,20 @@ struct MeetingTranscriptSegment: Codable, Identifiable, Sendable, Equatable {
     /// Duration of this segment
     var duration: TimeInterval {
         endTime - startTime
+    }
+
+    /// Display name with localization support
+    var displayName: String {
+        if let name = speakerName, !name.isEmpty { return name }
+        guard let id = speakerID else { return String(localized: "Невідомий") }
+        
+        // Localize "Speaker X" if it matches the pattern
+        if id.hasPrefix("Speaker "), let range = id.range(of: #"\d+"#, options: .regularExpression) {
+            let number = String(id[range])
+            return String(localized: "Спікер \(number)")
+        }
+        
+        return id
     }
 }
 
@@ -60,8 +77,7 @@ struct MeetingTranscriptDocument: Codable, Sendable {
     /// Full text with speaker labels
     var fullTextWithSpeakers: String {
         segments.map { segment in
-            let speaker = segment.speakerID ?? "Unknown"
-            return "\(speaker): \(segment.text)"
+            return "\(segment.displayName): \(segment.text)"
         }.joined(separator: "\n")
     }
     

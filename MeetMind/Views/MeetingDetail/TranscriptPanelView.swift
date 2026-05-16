@@ -203,7 +203,7 @@ struct TranscriptDetailRow: View {
                         newSpeakerName = metadata?.name ?? ""
                         isEditingSpeaker = true
                     } label: {
-                        Text(metadata?.displayName ?? speakerID.replacingOccurrences(of: "Speaker ", with: "Диктор "))
+                        Text(metadata?.displayName ?? segment.speakerName ?? segment.speakerID)
                             .font(Theme.Typography.caption)
                             .fontWeight(.bold)
                             .foregroundStyle(metadata?.color ?? Theme.Colors.accentPrimary)
@@ -215,7 +215,7 @@ struct TranscriptDetailRow: View {
                             Text("Налаштування спікера")
                                 .font(.headline)
                             
-                            TextField("Ім'я", text: $newSpeakerName)
+                            TextField("Ім’я", text: $newSpeakerName)
                                 .textFieldStyle(.roundedBorder)
                                 .onSubmit {
                                     onUpdateName(newSpeakerName)

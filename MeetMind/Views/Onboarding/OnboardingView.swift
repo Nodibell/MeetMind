@@ -84,11 +84,15 @@ struct OnboardingView: View {
             }
             .padding(.horizontal, 40)
             
-            if !isDownloading {
+            if !isDownloading && downloadProgress < 1.0 {
                 Button("Почати завантаження") {
                     startModelDownload()
                 }
                 .buttonStyle(.borderedProminent)
+            } else if downloadProgress >= 1.0 {
+                Text("Завантаження завершено")
+                    .foregroundColor(.green)
+                    .font(.subheadline)
             }
         }
     }
@@ -160,8 +164,8 @@ struct OnboardingView: View {
 }
 
 struct PermissionRow: View {
-    let title: String
-    let description: String
+    let title: LocalizedStringKey
+    let description: LocalizedStringKey
     let isGranted: Bool
     let action: () -> Void
     

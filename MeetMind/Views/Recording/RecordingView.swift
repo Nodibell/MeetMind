@@ -155,7 +155,7 @@ struct RecordingView: View {
         .frame(height: 80)
     }
     
-    private var processingLabel: String {
+    private var processingLabel: LocalizedStringKey {
         switch viewModel.state {
         case .preparing: return "Підготовка джерела аудіо..."
         case .transcribing: return "Транскрипція аудіо (high-quality)..."

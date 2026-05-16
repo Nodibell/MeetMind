@@ -1,19 +1,26 @@
 import SwiftUI
 import AppKit
+import Combine
 
 @MainActor
 final class FloatingIndicatorManager {
     static let shared = FloatingIndicatorManager()
     
     private var window: NSPanel?
+    private var indicatorState = IndicatorState()
     
     private init() {}
+    
+    class IndicatorState: ObservableObject {
+        @Published var isActiveSpeech = false
+        @Published var speakerName: String?
+    }
     
     func show(isActiveSpeech: Bool, speakerName: String?) {
         if window == nil {
             let panel = NSPanel(
-                contentRect: NSRect(x: 0, y: 0, width: 200, height: 60),
-                styleMask: [.nonactivatingPanel, .fullSizeContentView],
+                contentRect: NSRect(x: 0, y: 0, width: 220, height: 70),
+                styleMask: [.borderless, .nonactivatingPanel],
                 backing: .buffered,
                 defer: false
             )
@@ -21,20 +28,20 @@ final class FloatingIndicatorManager {
             panel.isFloatingPanel = true
             panel.level = .floating
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-            panel.titleVisibility = .hidden
-            panel.titlebarAppearsTransparent = true
             panel.backgroundColor = .clear
-            panel.hasShadow = true
+            panel.hasShadow = false // Remove shadow to eliminate any potential "frame" artifacts
             panel.isMovableByWindowBackground = true
             panel.isReleasedWhenClosed = false
             
-            let contentView = NSHostingView(rootView: RecordingIndicatorView(isActiveSpeech: isActiveSpeech, speakerName: speakerName))
+            indicatorState.isActiveSpeech = isActiveSpeech
+            indicatorState.speakerName = speakerName
+            
+            let contentView = NSHostingView(rootView: RecordingIndicatorView(state: indicatorState))
             panel.contentView = contentView
             
-            // Position in top-right corner by default
             if let screen = NSScreen.main {
-                let x = screen.visibleFrame.maxX - 220
-                let y = screen.visibleFrame.maxY - 80
+                let x = screen.visibleFrame.maxX - 240
+                let y = screen.visibleFrame.maxY - 90
                 panel.setFrameOrigin(NSPoint(x: x, y: y))
             }
             
@@ -46,9 +53,8 @@ final class FloatingIndicatorManager {
     }
     
     func update(isActiveSpeech: Bool, speakerName: String?) {
-        guard let window = window else { return }
-        let contentView = NSHostingView(rootView: RecordingIndicatorView(isActiveSpeech: isActiveSpeech, speakerName: speakerName))
-        window.contentView = contentView
+        indicatorState.isActiveSpeech = isActiveSpeech
+        indicatorState.speakerName = speakerName
     }
     
     func hide() {

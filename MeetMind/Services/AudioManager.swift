@@ -17,6 +17,7 @@ final class AudioManager: NSObject, @unchecked Sendable {
 
     // MARK: - Public State
     var isRecording = false
+    var isPaused = false
     var elapsedTime: TimeInterval = 0
     var audioLevels: [Float] = Array(repeating: 0, count: Constants.waveformSampleCount)
     var availableDevices: [AudioDevice] = []
@@ -177,6 +178,7 @@ final class AudioManager: NSObject, @unchecked Sendable {
 
                 // Downsample for Whisper
                 self.audioPipelineQueue.async {
+                    guard !self.isPaused else { return }
                     // Calculate RMS for waveform
                     let rms = self.calculateRMS(buffer: buffer)
 
@@ -229,7 +231,8 @@ final class AudioManager: NSObject, @unchecked Sendable {
         // Start timer
         let startTime = Date()
         timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            self?.elapsedTime = Date().timeIntervalSince(startTime)
+            guard let self = self, !self.isPaused else { return }
+            self.elapsedTime = Date().timeIntervalSince(startTime) - self.accumulatedPausedTime
         }
         
         // Start waveform visual timer
@@ -244,8 +247,32 @@ final class AudioManager: NSObject, @unchecked Sendable {
         return fileURL
     }
 
+    func pauseRecording() {
+        guard isRecording && !isPaused else { return }
+        isPaused = true
+        pausedAt = Date()
+        AppLogger.audio("Запис призупинено")
+    }
+
+    func resumeRecording() {
+        guard isRecording && isPaused else { return }
+        if let pausedAt = pausedAt {
+            accumulatedPausedTime += Date().timeIntervalSince(pausedAt)
+        }
+        isPaused = false
+        self.pausedAt = nil
+        AppLogger.audio("Запис відновлено")
+    }
+
+    private var pausedAt: Date?
+    private var accumulatedPausedTime: TimeInterval = 0
+
     func stopRecording() -> URL? {
         guard isRecording else { return nil }
+        
+        isPaused = false
+        pausedAt = nil
+        accumulatedPausedTime = 0
 
         audioEngine?.inputNode.removeTap(onBus: 0)
         audioEngine?.stop()
@@ -549,7 +576,8 @@ final class AudioManager: NSObject, @unchecked Sendable {
 
             let startTime = Date()
             timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-                self?.elapsedTime = Date().timeIntervalSince(startTime)
+                guard let self = self, !self.isPaused else { return }
+                self.elapsedTime = Date().timeIntervalSince(startTime) - self.accumulatedPausedTime
             }
             
             // Start waveform visual timer
@@ -601,8 +629,8 @@ extension AudioManager: SCStreamOutput, SCStreamDelegate {
         didOutputSampleBuffer sampleBuffer: CMSampleBuffer,
         of type: SCStreamOutputType
     ) {
-        guard type == .audio else { return }
-
+        guard type == .audio && !isPaused else { return }
+        
         // Update keep-alive atomic timestamp
         lastBufferTimestamp.withLock { $0 = CFAbsoluteTimeGetCurrent() }
 

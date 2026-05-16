@@ -120,11 +120,13 @@ final class MeetMindDiarizationEngine {
         }
     }
 
+    private var lastEmbeddings: [String: [Float]] = [:]
+
     /// Run offline diarization on a WAV file URL.
     ///
     /// - Parameter fileURL: Path to a WAV file (will be resampled internally by FluidAudio).
     /// - Returns: Array of `DiarizationSegment` with speaker IDs and time boundaries.
-    func diarize(fileURL: URL) async throws -> [DiarizationSegment] {
+    func diarize(fileURL: URL) async throws -> ([DiarizationSegment], [String: [Float]]) {
         guard let manager = offlineManager else {
             throw DiarizationEngineError.notInitialized
         }
@@ -134,6 +136,9 @@ final class MeetMindDiarizationEngine {
 
         do {
             let result = try await manager.process(fileURL)
+            
+            // Extract embeddings/centroids for identification
+            self.lastEmbeddings = result.speakerDatabase ?? [:] 
 
             let segments = result.segments.map { segment in
                 DiarizationSegment(
@@ -145,7 +150,7 @@ final class MeetMindDiarizationEngine {
 
             state = .modelsReady
             Self.logger.info("✅ File diarization complete: \(segments.count) segments, \(Set(segments.map(\.speakerID)).count) speakers.")
-            return segments
+            return (segments, lastEmbeddings)
         } catch {
             state = .error("File diarization failed: \(error.localizedDescription)")
             Self.logger.error("❌ File diarization failed: \(error.localizedDescription, privacy: .public)")
@@ -195,25 +200,35 @@ final class MeetMindDiarizationEngine {
         }
     }
 
-    /// Identify known speakers using the SpeakerProfileStore.
-    func identifySpeakers(segments: [DiarizationSegment], centroids: [String: [Float]]) async -> [String: SpeakerProfile] {
+    /// Identify known speakers using the SpeakerProfileStore and update transcript segments.
+    func identifySpeakers(segments: [MeetingTranscriptSegment], centroids: [String: [Float]]) async -> [MeetingTranscriptSegment] {
         var speakerMap: [String: SpeakerProfile] = [:]
+        let store = await SpeakerProfileStore.shared
         
         for (speakerID, centroid) in centroids {
-            if let profile = await SpeakerProfileStore.shared.findMatchingProfile(for: centroid) {
+            if let profile = await store.findMatchingProfile(for: centroid) {
                 speakerMap[speakerID] = profile
             } else {
-                // Create a new profile if no match found
-                let newProfile = await SpeakerProfileStore.shared.createProfile(
-                    name: "Спікер \(speakerMap.count + 1)",
-                    colorHex: "7266F2",
-                    centroid: centroid
-                )
-                speakerMap[speakerID] = newProfile
+                // For now, if no profile exists, we just leave it as is or create a placeholder
+                // In 1.3.1 we will eventually use LLM to extract names if needed
             }
         }
         
-        return speakerMap
+        return segments.map { segment in
+            guard let id = segment.speakerID, let profile = speakerMap[id] else {
+                return segment
+            }
+            
+            return MeetingTranscriptSegment(
+                id: segment.id,
+                startTime: segment.startTime,
+                endTime: segment.endTime,
+                text: segment.text,
+                speakerID: segment.speakerID,
+                speakerName: profile.name,
+                language: segment.language
+            )
+        }
     }
 
     // MARK: - Cleanup
@@ -241,7 +256,7 @@ struct DiarizationSegment: Sendable, Codable, Identifiable {
     let startTime: TimeInterval
     let endTime: TimeInterval
 
-    init(speakerID: String, startTime: TimeInterval, endTime: TimeInterval) {
+    nonisolated init(speakerID: String, startTime: TimeInterval, endTime: TimeInterval) {
         self.id = UUID()
         self.speakerID = speakerID
         self.startTime = startTime

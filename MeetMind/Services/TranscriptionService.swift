@@ -178,12 +178,16 @@ actor TranscriptionService {
 
             do {
                 try await diarizationEngine.prepareModels()
-                let diarizationSegments = try await diarizationEngine.diarize(fileURL: url)
+                let (diarizationSegments, centroids) = try await diarizationEngine.diarize(fileURL: url)
                 segments = diarizationEngine.alignSpeakers(
                     textSegments: segments,
                     diarizationSegments: diarizationSegments
                 )
-                AppLogger.ai("Diarization alignment complete: \(Set(segments.compactMap(\.speakerID)).count) speakers detected.")
+                
+                // New: Identify speakers by name from centroids
+                segments = await diarizationEngine.identifySpeakers(segments: segments, centroids: centroids)
+                
+                AppLogger.ai("Diarization alignment & identification complete: \(Set(segments.compactMap(\.speakerID)).count) speakers detected.")
                 // Free CoreML models after use
                 await diarizationEngine.unloadModels()
             } catch {
@@ -249,6 +253,8 @@ actor TranscriptionService {
                     startTime: startTime,
                     endTime: endTime,
                     text: text,
+                    speakerID: nil,
+                    speakerName: nil,
                     language: nil
                 )
                 segments.append(transcriptSegment)

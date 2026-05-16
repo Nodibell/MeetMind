@@ -59,69 +59,97 @@ struct RecordingControlsView: View {
     // MARK: - Record Button
 
     private var recordButton: some View {
-        VStack(spacing: Theme.Spacing.md) {
-            Button(action: handleRecordTap) {
-                ZStack {
-                    // Outer glow ring
-                    Circle()
-                        .stroke(buttonColor.opacity(0.3), lineWidth: 2)
-                        .frame(width: 88, height: 88)
-                        .scaleEffect(viewModel.state == .recording ? 1.2 : 1.0)
-                        .blur(radius: viewModel.state == .recording ? 4 : 0)
-                        .opacity(viewModel.state == .recording ? 0.6 : (isHoveringRecord ? 0.4 : 0.15))
-                        .animation(viewModel.state == .recording ? Theme.Animation.pulse : .default,
-                                   value: viewModel.state)
+        HStack(spacing: Theme.Spacing.xxl) {
+            // Record Button
+            VStack(spacing: Theme.Spacing.md) {
+                Button(action: handleRecordTap) {
+                    ZStack {
+                        // Outer glow ring
+                        Circle()
+                            .stroke(buttonColor.opacity(0.3), lineWidth: 2)
+                            .frame(width: 88, height: 88)
+                            .scaleEffect(viewModel.state == .recording ? 1.2 : 1.0)
+                            .blur(radius: viewModel.state == .recording ? 4 : 0)
+                            .opacity(viewModel.state == .recording ? 0.6 : (isHoveringRecord ? 0.4 : 0.15))
+                            .animation(viewModel.state == .recording ? Theme.Animation.pulse : .default,
+                                       value: viewModel.state)
 
-                    // Main button
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: buttonGradientColors,
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+                        // Main button
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: buttonGradientColors,
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
                             )
-                        )
-                        .frame(width: 72, height: 72)
-                        .shadow(color: buttonColor.opacity(0.4), radius: isHoveringRecord ? 16 : 8)
-                        .scaleEffect(isPressing ? 0.92 : 1.0)
+                            .frame(width: 72, height: 72)
+                            .shadow(color: buttonColor.opacity(0.4), radius: isHoveringRecord ? 16 : 8)
+                            .scaleEffect(isPressing ? 0.92 : 1.0)
 
-                    // Icon
-                    Group {
-                        if viewModel.state == .recording {
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(.white)
-                                .frame(width: 22, height: 22)
-                        } else if isProcessing {
-                            ProgressView()
-                                .progressViewStyle(.circular)
-                                .scaleEffect(0.8)
-                                .tint(.white)
-                        } else {
-                            Circle()
-                                .fill(.white)
-                                .frame(width: 24, height: 24)
+                        // Icon
+                        Group {
+                            if viewModel.state == .recording {
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(.white)
+                                    .frame(width: 22, height: 22)
+                            } else if isProcessing {
+                                ProgressView()
+                                    .progressViewStyle(.circular)
+                                    .scaleEffect(0.8)
+                                    .tint(.white)
+                            } else {
+                                Circle()
+                                    .fill(.white)
+                                    .frame(width: 24, height: 24)
+                            }
                         }
                     }
                 }
-            }
-            .buttonStyle(.plain)
-            .disabled(isProcessing)
-            .onHover { hovering in
-                withAnimation(Theme.Animation.fast) {
-                    isHoveringRecord = hovering
+                .buttonStyle(.plain)
+                .disabled(isProcessing)
+                .onHover { hovering in
+                    withAnimation(Theme.Animation.fast) {
+                        isHoveringRecord = hovering
+                    }
                 }
-            }
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in isPressing = true }
-                    .onEnded { _ in isPressing = false }
-            )
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in isPressing = true }
+                        .onEnded { _ in isPressing = false }
+                )
 
-            // Label below button
-            Text(buttonLabel)
-                .font(Theme.Typography.captionMedium)
-                .foregroundStyle(Theme.Colors.textSecondary)
+                // Label below button
+                Text(buttonLabel)
+                    .font(Theme.Typography.captionMedium)
+                    .foregroundStyle(Theme.Colors.textSecondary)
+            }
+            
+            // Pause / Resume Button
+            if viewModel.state == .recording {
+                VStack(spacing: Theme.Spacing.md) {
+                    Button(action: handlePauseTap) {
+                        ZStack {
+                            Circle()
+                                .fill(Theme.Colors.backgroundSecondary)
+                                .frame(width: 56, height: 56)
+                                .overlay(Circle().stroke(Color.white.opacity(0.1), lineWidth: 1))
+                            
+                            Image(systemName: viewModel.audioManager.isPaused ? "play.fill" : "pause.fill")
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundStyle(Theme.Colors.textPrimary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Text(viewModel.audioManager.isPaused ? "Продовжити" : "Пауза")
+                        .font(Theme.Typography.captionMedium)
+                        .foregroundStyle(Theme.Colors.textSecondary)
+                }
+                .transition(.scale.combined(with: .opacity))
+            }
         }
+        .animation(.spring(), value: viewModel.state)
     }
 
     // MARK: - Device Picker
@@ -231,6 +259,14 @@ struct RecordingControlsView: View {
         }
     }
 
+    private func handlePauseTap() {
+        if viewModel.audioManager.isPaused {
+            viewModel.resumeRecording()
+        } else {
+            viewModel.pauseRecording()
+        }
+    }
+
     private var buttonColor: Color {
         viewModel.state == .recording ? Theme.Colors.recording : Theme.Colors.accentPrimary
     }
@@ -243,7 +279,7 @@ struct RecordingControlsView: View {
         }
     }
 
-    private var buttonLabel: String {
+    private var buttonLabel: LocalizedStringKey {
         switch viewModel.state {
         case .idle: return "Почати запис"
         case .recording: return "Зупинити"

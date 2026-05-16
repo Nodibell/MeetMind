@@ -8,7 +8,15 @@ struct SpeakerMetadata: Codable, Identifiable, Sendable {
     var colorHex: String? // Hex color code
     
     var displayName: String {
-        name ?? id.replacingOccurrences(of: "Speaker ", with: "Диктор ")
+        if let name = name, !name.isEmpty { return name }
+        
+        // Localize "Speaker X" if it matches the pattern
+        if id.hasPrefix("Speaker "), let range = id.range(of: #"\d+"#, options: .regularExpression) {
+            let number = String(id[range])
+            return String(localized: "Спікер \(number)")
+        }
+        
+        return id
     }
     
     var color: Color {

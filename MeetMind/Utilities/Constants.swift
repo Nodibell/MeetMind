@@ -10,7 +10,7 @@ import Foundation
 enum Constants {
     // MARK: - App Info
     nonisolated static let appName = "MeetMind"
-    nonisolated static let appVersion = "1.3.0"
+    nonisolated static let appVersion = "1.3.1"
     
     // MARK: - Directories
     nonisolated static let recordingsDirectoryName = "Recordings"

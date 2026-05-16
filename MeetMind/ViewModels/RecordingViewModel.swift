@@ -161,17 +161,34 @@ final class RecordingViewModel {
         }
     }
 
+    func pauseRecording() {
+        audioManager.pauseRecording()
+    }
+
+    func resumeRecording() {
+        audioManager.resumeRecording()
+    }
+
     private func startIndicatorUpdates() {
         Task {
             while state == .recording {
                 try? await Task.sleep(for: .milliseconds(200))
-                let isSpeaking = audioManager.audioLevels.last ?? 0 > 0.1
-                let lastSpeaker = liveTranscript.last?.speakerID
+                
+                let isSpeaking: Bool
+                let statusText: String?
+                
+                if audioManager.isPaused {
+                    isSpeaking = false
+                    statusText = String(localized: "Призупинено")
+                } else {
+                    isSpeaking = audioManager.audioLevels.last ?? 0 > 0.1
+                    statusText = liveTranscript.last?.speakerName ?? liveTranscript.last?.speakerID
+                }
                 
                 await MainActor.run {
                     FloatingIndicatorManager.shared.update(
                         isActiveSpeech: isSpeaking,
-                        speakerName: lastSpeaker
+                        speakerName: statusText
                     )
                 }
             }
