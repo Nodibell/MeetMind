@@ -25,7 +25,7 @@ final class RecordingViewModel {
     }
 
     var state: RecordingState = .idle
-    var meetingTitle: String = "Нова нарада"
+    var meetingTitle: String = String(localized: "Нова нарада")
     var elapsedTime: TimeInterval = 0
     var liveTranscript: [MeetingTranscriptSegment] = []
     var fullTranscript: MeetingTranscriptDocument?
@@ -89,7 +89,7 @@ final class RecordingViewModel {
                 Task { @MainActor in
                     switch newState {
                     case .downloading(let progress):
-                        self.transcriptionProgress = "Завантаження моделі: \(Int(progress * 100))%"
+                        self.transcriptionProgress = String(localized: "Завантаження моделі: \(Int(progress * 100))%")
                         self.isTranscriptionReady = false
                     case .ready:
                         self.transcriptionProgress = ""
@@ -146,13 +146,37 @@ final class RecordingViewModel {
                     self.modelContext?.insert(meeting)
                     try? self.modelContext?.save()
 
+                    // Show always-on-top indicator
+                    FloatingIndicatorManager.shared.show(isActiveSpeech: false, speakerName: nil)
+                    
                     self.startLiveTranscription()
+                    self.startIndicatorUpdates()
                 }
             } catch {
                 await MainActor.run {
                     self.state = .error(error.localizedDescription)
                     self.errorMessage = error.localizedDescription
                 }
+            }
+        }
+    }
+
+    private func startIndicatorUpdates() {
+        Task {
+            while state == .recording {
+                try? await Task.sleep(for: .milliseconds(200))
+                let isSpeaking = audioManager.audioLevels.last ?? 0 > 0.1
+                let lastSpeaker = liveTranscript.last?.speakerID
+                
+                await MainActor.run {
+                    FloatingIndicatorManager.shared.update(
+                        isActiveSpeech: isSpeaking,
+                        speakerName: lastSpeaker
+                    )
+                }
+            }
+            await MainActor.run {
+                FloatingIndicatorManager.shared.hide()
             }
         }
     }
@@ -413,7 +437,7 @@ final class RecordingViewModel {
 
     func resetForNewRecording() {
         state = .idle
-        meetingTitle = "Нова нарада"
+        meetingTitle = String(localized: "Нова нарада")
         liveTranscript = []
         fullTranscript = nil
         summary = ""

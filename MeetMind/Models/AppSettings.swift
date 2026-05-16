@@ -96,6 +96,7 @@ final class AppSettings: @unchecked Sendable {
     enum LLMProvider: String, CaseIterable, Identifiable, Codable, Sendable {
         case ollama = "Ollama"
         case lmStudio = "LM Studio"
+        case deepMLX = "DeepMLX"
         var id: String { rawValue }
     }
 
@@ -113,6 +114,14 @@ final class AppSettings: @unchecked Sendable {
 
     var customSummaryPrompt: String {
         didSet { UserDefaults.standard.set(customSummaryPrompt, forKey: Keys.customSummaryPrompt) }
+    }
+    
+    var enableSharding: Bool {
+        didSet { UserDefaults.standard.set(enableSharding, forKey: "enableSharding") }
+    }
+    
+    var enablePrefetch: Bool {
+        didSet { UserDefaults.standard.set(enablePrefetch, forKey: "enablePrefetch") }
     }
 
     // MARK: - Whisper Models
@@ -138,9 +147,9 @@ final class AppSettings: @unchecked Sendable {
     // MARK: - Supported Languages
 
     nonisolated static let supportedLanguages: [(code: String, name: String)] = [
-        ("uk", "Українська"),
-        ("en", "English"),
-        ("auto", "Авто-визначення"),
+        ("uk", String(localized: "Українська")),
+        ("en", String(localized: "English")),
+        ("auto", String(localized: "Авто-визначення")),
     ]
 
     // MARK: - Init
@@ -153,8 +162,8 @@ final class AppSettings: @unchecked Sendable {
         defaultLanguage         = UserDefaults.standard.string(forKey: Keys.defaultLanguage) ?? Constants.defaultLanguage
         summaryLanguage         = UserDefaults.standard.string(forKey: Keys.summaryLanguage) ?? "auto"
         appLanguage             = UserDefaults.standard.string(forKey: Keys.appLanguage) ?? "uk"
-        waveformFPS             = UserDefaults.standard.integer(forKey: Keys.waveformFPS)
-        if waveformFPS == 0 { waveformFPS = 60 }
+        let savedFPS = UserDefaults.standard.integer(forKey: Keys.waveformFPS)
+        waveformFPS = savedFPS == 0 ? 60 : savedFPS
         
         // --- LLM Settings ---
         if let providerStr = UserDefaults.standard.string(forKey: Keys.llmProvider),
@@ -166,6 +175,8 @@ final class AppSettings: @unchecked Sendable {
         llmModel                = UserDefaults.standard.string(forKey: Keys.llmModel) ?? UserDefaults.standard.string(forKey: "ollamaModel") ?? Constants.defaultOllamaModel
         llmEndpoint             = UserDefaults.standard.string(forKey: Keys.llmEndpoint) ?? UserDefaults.standard.string(forKey: "ollamaEndpoint") ?? Constants.defaultOllamaEndpoint
         customSummaryPrompt     = UserDefaults.standard.string(forKey: Keys.customSummaryPrompt) ?? ""
+        enableSharding          = UserDefaults.standard.object(forKey: "enableSharding") as? Bool ?? true
+        enablePrefetch          = UserDefaults.standard.object(forKey: "enablePrefetch") as? Bool ?? true
 
         // --- Whisper models (with legacy name migration) ---
         let liveRaw = UserDefaults.standard.string(forKey: Keys.whisperModelLive) ?? Constants.liveTranscriptionModel

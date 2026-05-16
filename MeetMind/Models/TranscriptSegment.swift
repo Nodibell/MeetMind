@@ -57,6 +57,14 @@ struct MeetingTranscriptDocument: Codable, Sendable {
         segments.map(\.text).joined(separator: " ")
     }
     
+    /// Full text with speaker labels
+    var fullTextWithSpeakers: String {
+        segments.map { segment in
+            let speaker = segment.speakerID ?? "Unknown"
+            return "\(speaker): \(segment.text)"
+        }.joined(separator: "\n")
+    }
+    
     /// Full text with timestamps
     var formattedText: String {
         segments.map { segment in

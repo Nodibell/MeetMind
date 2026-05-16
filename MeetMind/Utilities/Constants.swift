@@ -10,7 +10,7 @@ import Foundation
 enum Constants {
     // MARK: - App Info
     nonisolated static let appName = "MeetMind"
-    nonisolated static let appVersion = "1.0.0"
+    nonisolated static let appVersion = "1.3.0"
     
     // MARK: - Directories
     nonisolated static let recordingsDirectoryName = "Recordings"
@@ -31,7 +31,7 @@ enum Constants {
     nonisolated static let audioChunkDuration: TimeInterval = 5.0  // seconds per live chunk
 
     // MARK: - Audio Pipeline Infrastructure
-    nonisolated static let audioPipelineQueueLabel = "com.meetmind.ai.audio-pipeline.serial"
+    nonisolated static let audioPipelineQueueLabel = "com.meetmind.audio.pipeline"
     nonisolated static let keepAliveIntervalSeconds: Double = 5.0
     nonisolated static let streamStallThresholdSeconds: Double = 5.0
     nonisolated static let maxStreamReconnectionRetries = 3

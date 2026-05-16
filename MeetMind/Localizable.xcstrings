@@ -1540,6 +1540,39 @@
           }
         }
       }
+    },
+    "Нова нарада" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Meeting"
+          }
+        }
+      }
+    },
+    "Завантаження моделі: %lld%%" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloading model: %lld%%"
+          }
+        }
+      }
+    },
+    "Авто-визначення" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auto-detection"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

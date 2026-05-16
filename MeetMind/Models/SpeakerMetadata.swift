@@ -33,7 +33,7 @@ extension Color {
         case 8: // ARGB (32-bit)
             (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
         default:
-            (a, r, g, b) = (1, 1, 1, 0)
+            (a, r, g, b) = (255, 0, 0, 0)
         }
 
         self.init(
@@ -46,10 +46,18 @@ extension Color {
     }
     
     func toHex() -> String {
-        let components = NSColor(self).cgColor.components ?? [0, 0, 0]
-        let r = Float(components[0])
-        let g = Float(components[1])
-        let b = Float(components[2])
-        return String(format: "%02lX%02lX%02lX", lroundf(r * 255), lroundf(g * 255), lroundf(b * 255))
+        // Ensure we're working with sRGB color space to avoid darkening/shifting
+        guard let sRGBColor = NSColor(self).usingColorSpace(.sRGB) else {
+            return "7266F2" // Fallback to accentPrimary
+        }
+        
+        let r = Float(sRGBColor.redComponent)
+        let g = Float(sRGBColor.greenComponent)
+        let b = Float(sRGBColor.blueComponent)
+        
+        return String(format: "%02X%02X%02X", 
+                      max(0, min(255, lroundf(r * 255))), 
+                      max(0, min(255, lroundf(g * 255))), 
+                      max(0, min(255, lroundf(b * 255))))
     }
 }

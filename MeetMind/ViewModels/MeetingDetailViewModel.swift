@@ -358,7 +358,7 @@ final class MeetingDetailViewModel {
     }
     
     func autoDetectSpeakerNames() async {
-        guard let transcriptText = transcript?.fullText, !transcriptText.isEmpty else { return }
+        guard let transcriptText = transcript?.fullTextWithSpeakers, !transcriptText.isEmpty else { return }
         
         do {
             let detected = try await llmService.extractSpeakerNames(transcript: transcriptText)

@@ -155,19 +155,8 @@ final class MeetMindDiarizationEngine {
 
     // MARK: - Temporal Subsegment Alignment
 
-    /// Align WhisperKit transcript segments to FluidAudio diarization speaker windows
-    /// using a geometric-midpoint subsegment strategy.
-    ///
-    /// For each text segment, the midpoint is computed as:
-    ///     `midpoint = startTime + (endTime - startTime) / 2`
-    ///
-    /// The speaker whose active window fully contains (or is nearest to) that midpoint
-    /// is assigned to the text segment.
-    ///
-    /// - Parameters:
-    ///   - textSegments: Transcript segments from WhisperKit.
-    ///   - diarizationSegments: Speaker segments from FluidAudio.
-    /// - Returns: Transcript segments with `speakerID` populated.
+    /// Align WhisperKit transcript segments to speaker windows using a strict 
+    /// midpoint-subsegment strategy for maximum attribution accuracy.
     nonisolated func alignSpeakers(
         textSegments: [MeetingTranscriptSegment],
         diarizationSegments: [DiarizationSegment]
@@ -175,27 +164,56 @@ final class MeetMindDiarizationEngine {
         guard !diarizationSegments.isEmpty else { return textSegments }
 
         return textSegments.map { textSegment in
+            // Calculate the temporal midpoint of the text segment
             let midpoint = textSegment.startTime + (textSegment.endTime - textSegment.startTime) / 2.0
-
-            // Primary: find the speaker whose window fully contains the midpoint
-            let containingSpeaker = diarizationSegments.first { segment in
+            
+            // Find the diarization segment that contains this midpoint
+            let matchingSegment = diarizationSegments.first { segment in
                 midpoint >= segment.startTime && midpoint <= segment.endTime
             }
-
-            // Fallback: nearest speaker by start-time proximity
-            let bestSpeaker = containingSpeaker ?? diarizationSegments.min(by: {
-                abs($0.startTime - midpoint) < abs($1.startTime - midpoint)
-            })
+            
+            // If no segment contains the midpoint exactly, find the nearest one
+            let speakerID: String?
+            if let matchingSegment {
+                speakerID = matchingSegment.speakerID
+            } else {
+                speakerID = diarizationSegments.min(by: {
+                    let d1 = min(abs($0.startTime - midpoint), abs($0.endTime - midpoint))
+                    let d2 = min(abs($1.startTime - midpoint), abs($1.endTime - midpoint))
+                    return d1 < d2
+                })?.speakerID
+            }
 
             return MeetingTranscriptSegment(
                 id: textSegment.id,
                 startTime: textSegment.startTime,
                 endTime: textSegment.endTime,
                 text: textSegment.text,
-                speakerID: bestSpeaker?.speakerID,
+                speakerID: speakerID,
                 language: textSegment.language
             )
         }
+    }
+
+    /// Identify known speakers using the SpeakerProfileStore.
+    func identifySpeakers(segments: [DiarizationSegment], centroids: [String: [Float]]) async -> [String: SpeakerProfile] {
+        var speakerMap: [String: SpeakerProfile] = [:]
+        
+        for (speakerID, centroid) in centroids {
+            if let profile = await SpeakerProfileStore.shared.findMatchingProfile(for: centroid) {
+                speakerMap[speakerID] = profile
+            } else {
+                // Create a new profile if no match found
+                let newProfile = await SpeakerProfileStore.shared.createProfile(
+                    name: "Спікер \(speakerMap.count + 1)",
+                    colorHex: "7266F2",
+                    centroid: centroid
+                )
+                speakerMap[speakerID] = newProfile
+            }
+        }
+        
+        return speakerMap
     }
 
     // MARK: - Cleanup

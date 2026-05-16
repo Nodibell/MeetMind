@@ -22,6 +22,7 @@ struct ContentView: View {
     @State private var isShowingGlobalSearch = false
     @State private var isShowingActionItems = false
     @State private var isShowingRecording = true
+    @State private var isShowingOnboarding = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     
     // ViewModels
@@ -38,6 +39,13 @@ struct ContentView: View {
         .navigationTitle("")
         .onAppear {
             setupViewModels()
+            checkFirstRun()
+        }
+        .sheet(isPresented: $isShowingOnboarding) {
+            OnboardingView {
+                isShowingOnboarding = false
+                UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+            }
         }
         .onChange(of: selectedMeetingID) { oldID, newID in
             if newID == UUID.globalSearch {
@@ -203,6 +211,13 @@ struct ContentView: View {
     
     // MARK: - Setup
     
+    private func checkFirstRun() {
+        let hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+        if !hasCompletedOnboarding {
+            isShowingOnboarding = true
+        }
+    }
+
     private func setupViewModels() {
         if recordingVM == nil {
             let vm = RecordingViewModel(

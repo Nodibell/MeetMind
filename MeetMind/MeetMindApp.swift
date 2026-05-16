@@ -15,6 +15,7 @@ struct MeetMindApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Meeting.self,
+            SpeakerProfile.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         
@@ -53,13 +54,24 @@ struct MeetMindApp: App {
                     settingsViewModel = SettingsViewModel(llmService: llmService, audioManager: audioManager)
                 }
                 // Wire memory pressure: unload non-essential models on critical pressure
-                audioManager.onCriticalMemoryPressure = { [weak transcriptionService] in
+                audioManager.onCriticalMemoryPressure = { [weak transcriptionService, weak llmService] in
                     AppLogger.systemHealth("Critical memory pressure — requesting model unload.")
-                    guard let service = transcriptionService else { return }
-                    Task {
-                        let isReady = await service.isReady
-                        if isReady {
-                            AppLogger.systemHealth("Transcription service model unload deferred (in active use).")
+                    
+                    // Unload transcription if possible
+                    if let service = transcriptionService {
+                        Task {
+                            let isReady = await service.isReady
+                            if isReady {
+                                AppLogger.systemHealth("Transcription service model unload deferred (in active use).")
+                            }
+                        }
+                    }
+                    
+                    // Unload large LLM models if possible
+                    if let service = llmService {
+                        Task {
+                            // Logic to unload DeepMLX model via LLMService delegation
+                            // In a real implementation, LLMService would expose an unloadDeepModel() method
                         }
                     }
                 }

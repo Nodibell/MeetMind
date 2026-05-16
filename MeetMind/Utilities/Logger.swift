@@ -127,4 +127,10 @@ enum AppLogger {
     nonisolated static func transcriptRedacted(segmentCount: Int, durationSeconds: Double) {
         aiPipe.info("📝 Transcription complete: \(segmentCount, privacy: .public) segments, \(durationSeconds, privacy: .public)s duration [content redacted]")
     }
+
+    /// Log sensitive transcript text for debugging (only visible in Console.app with 
+    /// private logging enabled, never stored in sysdiagnose or crash reports).
+    nonisolated static func transcriptSensitive(_ text: String) {
+        aiPipe.debug("📝 [TRANSCRIPT]: \(text, privacy: .private)")
+    }
 }

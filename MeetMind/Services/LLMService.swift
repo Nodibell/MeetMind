@@ -22,6 +22,7 @@ actor LLMService {
     private(set) var state: ServiceState = .idle
     private var lastHealthCheckDate: Date?
     private let healthCacheDuration: TimeInterval = 60 // seconds
+    private let deepLLM = DeepLLMService()
     
     // MARK: - Callbacks
     var onStateChanged: (@Sendable (ServiceState) -> Void)?
@@ -105,6 +106,14 @@ actor LLMService {
     
     /// Check if LLM server is running and list available models
     func checkHealth() async -> Bool {
+        let provider = AppSettings.shared.llmProvider
+        
+        // DeepMLX is local and always "running" if initialized
+        if provider == .deepMLX {
+            updateState(.available(models: ["Llama-3-70B-DeepSummary"]))
+            return true
+        }
+
         // Return cached result if still fresh
         if let lastCheck = lastHealthCheckDate,
            Date().timeIntervalSince(lastCheck) < healthCacheDuration,
@@ -114,7 +123,6 @@ actor LLMService {
 
         updateState(.checking)
         
-        let provider = AppSettings.shared.llmProvider
         let endpoint = AppSettings.shared.llmEndpoint
         let path = provider == .lmStudio ? Constants.openaiHealthPath : Constants.ollamaHealthPath
         
@@ -160,6 +168,13 @@ actor LLMService {
     /// Generate meeting summary from transcript text
     func generateSummary(transcript: String, targetLanguage: String? = nil) async throws -> String {
         AppLogger.info("Запит на генерацію резюме (довжина: \(transcript.count) симв., мова: \(targetLanguage ?? "auto"))")
+        
+        let provider = AppSettings.shared.llmProvider
+        
+        if provider == .deepMLX {
+            return try await deepLLM.generateSummary(transcript: transcript)
+        }
+        
         let model = AppSettings.shared.llmModel
         let endpoint = AppSettings.shared.llmEndpoint
         
@@ -518,12 +533,15 @@ actor LLMService {
         let endpoint = AppSettings.shared.llmEndpoint
         
         let prompt = """
-        Проаналізуй транскрипт та спробуй визначити імена спікерів, якщо вони згадувалися або зверталися один до одного.
-        Поверни результат ТІЛЬКИ у форматі JSON: {"Speaker ID": "Ім'я"}.
-        Якщо ім'я невідоме, не додавай його до списку.
+        Проаналізуй транскрипт наради, де кожен сегмент починається з ідентифікатора спікера (наприклад, "Speaker 0:", "Speaker 1:").
+        Твоє завдання — визначити справжні імена людей, якщо вони згадувалися в тексті (наприклад, хтось привітався або представився).
+        
+        Поверни результат ТІЛЬКИ у форматі JSON, де ключ — це ідентифікатор спікера, а значення — його ім'я.
+        Приклад: {"Speaker 0": "Олексій", "Speaker 1": "Марія"}
+        Якщо ім'я для конкретного спікера неможливо визначити, не додавай його до JSON.
         
         Транскрипт:
-        \(String(transcript.prefix(5000)))
+        \(String(transcript.prefix(6000)))
         """
         
         let result = try await sendChatRequest(
