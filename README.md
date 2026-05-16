@@ -7,16 +7,20 @@
 ## Key Features ✨
 
 - **Local Transcription**: Uses Apple's WhisperKit for high-quality speech recognition directly on your Mac (CPU/Neural Engine).
-- **System Audio Support**: Record your microphone, system audio (Zoom/Google Meet), or both simultaneously.
+- **Speaker Diarization & Identification**: Automatically identifies different speakers and remembers their names across meetings using voice embeddings.
+- **System Audio Support**: Record your microphone, system audio (Zoom/Google Meet), or both simultaneously using ScreenCaptureKit.
+- **Pause & Resume**: Full control over your recording sessions with the ability to pause and continue without losing context.
 - **AI Summaries via Ollama**: Automatically generate key takeaways, action items, and decisions using local LLMs (Llama 3, Mistral, Gemma, etc.).
-- **Obsidian Export**: Direct integration with your Obsidian vault via Security-Scoped Bookmarks.
+- **Obsidian Export**: Direct integration with your Obsidian vault for seamless workflow automation.
+- **Floating Status Indicator**: A sleek, borderless overlay that shows real-time recording status and active speaker identification.
 - **Privacy First**: Your data never leaves your device. No cloud APIs are used for transcription or analysis.
-- **Modern Design**: Sleek macOS interface with Dark Mode and Glassmorphism support.
+- **Modern Design**: Sleek macOS interface with Glassmorphism, Dark Mode, and a professional onboarding experience.
 
 ## Tech Stack 🛠
 
 - **Swift & SwiftUI**: Modern interface and high performance.
 - **WhisperKit**: OpenAI Whisper port by Argmax optimized for CoreML.
+- **FluidAudio**: Advanced diarization and speaker identification engine.
 - **Ollama**: Local LLM execution.
 - **SwiftData**: Reliable persistence for meeting history.
 - **ScreenCaptureKit**: High-quality audio capture.
