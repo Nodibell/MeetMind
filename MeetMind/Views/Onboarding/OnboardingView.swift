@@ -100,7 +100,7 @@ struct OnboardingView: View {
                 .foregroundColor(.green)
             
             Text("Все готово!")
-                .font(.title2, weight: .bold)
+                .font(.title2.bold())
             
             Text("Тепер ваші наради будуть автоматично транскрибуватися та аналізуватися професійним AI асистентом.")
                 .multilineTextAlignment(.center)

@@ -18,6 +18,10 @@ Carthage/Build/
 
 ## Root-level files (Build logs)
 build_log*.txt
+build_errors*.txt
+build_warnings*.txt
+build_archive*.txt
+build_report*.txt
 
 ## macOS
 .DS_Store

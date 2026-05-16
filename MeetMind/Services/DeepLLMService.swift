@@ -1,7 +1,10 @@
 import Foundation
+import os
+
+#if canImport(MLX)
 import MLX
 import MLXLLM
-import os
+#endif
 
 /// "Deep Summary" engine implementing AirLLM-style layer-wise inference.
 /// Enables running 70B+ models on memory-constrained devices by loading
@@ -10,8 +13,11 @@ actor DeepLLMService {
     
     private static let logger = Logger(subsystem: "com.meetmind.app", category: "DeepLLM")
     
-    private var model: Model?
-    private var tokenizer: Tokenizer?
+    #if canImport(MLX)
+    private var model: MLXLLM.Model?
+    private var tokenizer: MLXLLM.Tokenizer?
+    #endif
+    
     private var isSharded = true
     private var prefetchEnabled = true
     
@@ -27,25 +33,19 @@ actor DeepLLMService {
     
     /// Load a large model with sharding and prefetching enabled.
     func loadModel(modelPath: URL) async throws {
+        #if canImport(MLX)
         state = .loading(progress: 0.1)
         Self.logger.info("🚀 Loading DeepLLM model with layer-sharding...")
         
         do {
-            // MLX Backend configuration for sharded loading
             let config = ModelConfiguration(
                 modelPath: modelPath,
                 loadSharded: true,
                 prefetchLayers: prefetchEnabled
             )
             
-            // Simulation of layer-wise orchestration (AirLLM logic)
-            // In a real MLX implementation, this would involve custom layer loading loops
-            // if the model doesn't fit in unified memory.
-            
             self.model = try await MLXLLM.loadModel(configuration: config) { progress in
-                Task { @MainActor in
-                    // Update UI progress
-                }
+                // Progress update logic
             }
             
             self.tokenizer = try await MLXLLM.loadTokenizer(configuration: config)
@@ -57,12 +57,17 @@ actor DeepLLMService {
             Self.logger.error("❌ Failed to load large model: \(error.localizedDescription)")
             throw error
         }
+        #else
+        Self.logger.error("❌ MLX is not available in this build configuration.")
+        throw NSError(domain: "DeepLLM", code: 404, userInfo: [NSLocalizedDescriptionKey: "MLX libraries not found. Deep Summary requires MLX backend."])
+        #endif
     }
     
     /// Generate a summary using the layer-wise pipeline.
     func generateSummary(transcript: String) async throws -> String {
+        #if canImport(MLX)
         guard let model = model, let tokenizer = tokenizer else {
-            throw LLMError.modelNotFound("DeepLLM Model not loaded")
+            throw NSError(domain: "DeepLLM", code: 404, userInfo: [NSLocalizedDescriptionKey: "DeepLLM Model not loaded"])
         }
         
         state = .generating(tokenCount: 0)
@@ -71,7 +76,6 @@ actor DeepLLMService {
         let prompt = buildDeepSummaryPrompt(transcript: transcript)
         var fullResponse = ""
         
-        // Use MLX Generate with prefetching enabled for 10% speed boost
         let stream = MLXLLM.generate(
             prompt: prompt,
             model: model,
@@ -83,11 +87,13 @@ actor DeepLLMService {
         
         for try await token in stream {
             fullResponse += token
-            // Periodic state update for UI
         }
         
         state = .ready
         return fullResponse
+        #else
+        throw NSError(domain: "DeepLLM", code: 404, userInfo: [NSLocalizedDescriptionKey: "MLX libraries not found."])
+        #endif
     }
     
     private func buildDeepSummaryPrompt(transcript: String) -> String {
@@ -104,8 +110,10 @@ actor DeepLLMService {
     
     /// Emergency unload when system is under critical memory pressure.
     func unload() {
+        #if canImport(MLX)
         model = nil
         tokenizer = nil
+        #endif
         state = .idle
         Self.logger.warning("🧹 DeepLLM model purged due to memory pressure.")
     }
