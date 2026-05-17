@@ -37,23 +37,25 @@ final class RecordingViewModel {
     var transcriptionProgressValue: Double = 0.0
 
     // MARK: - Services
-    var audioManager: AudioManager
-    private let transcriptionService: TranscriptionService
-    private let llmService: LLMService
+    var audioManager: any AudioProvider
+    private let transcriptionService: any TranscriptionProvider
+    private let llmService: any LLMProvider
     var availableSystemAudioSources: [AudioManager.SystemAudioSourceInfo] = []
     var completedMeetingID: UUID?
+    var isFloatingIndicatorVisible = true
+    private var isTranscribingLive = false
 
     // MARK: - Private
     private var recordingURL: URL?
     private var liveTranscriptionTask: Task<Void, Never>?
-    private var currentMeeting: Meeting?
+    private(set) var currentMeeting: Meeting?
     private var modelContext: ModelContext?
 
     // MARK: - Init
     init(
-        audioManager: AudioManager,
-        transcriptionService: TranscriptionService,
-        llmService: LLMService
+        audioManager: any AudioProvider,
+        transcriptionService: any TranscriptionProvider,
+        llmService: any LLMProvider
     ) {
         self.audioManager = audioManager
         self.transcriptionService = transcriptionService
@@ -75,7 +77,7 @@ final class RecordingViewModel {
                     self.availableSystemAudioSources = sources
                 }
             } catch {
-                AppLogger.error("Помилка отримання списку джерел системного аудіо: \(error)")
+                AppLogger.error("Failed to fetch system audio sources: \(error)")
             }
         }
     }
@@ -90,6 +92,9 @@ final class RecordingViewModel {
                     switch newState {
                     case .downloading(let progress):
                         self.transcriptionProgress = String(localized: "Завантаження моделі: \(Int(progress * 100))%")
+                        self.isTranscriptionReady = false
+                    case .loading:
+                        self.transcriptionProgress = String(localized: "Ініціалізація моделі AI...")
                         self.isTranscriptionReady = false
                     case .ready:
                         self.transcriptionProgress = ""
@@ -111,7 +116,7 @@ final class RecordingViewModel {
 
     func initializeTranscription() async {
         do {
-            try await transcriptionService.initialize()
+            try await transcriptionService.initialize(modelName: nil)
             isTranscriptionReady = true
         } catch {
             errorMessage = error.localizedDescription
@@ -141,14 +146,18 @@ final class RecordingViewModel {
                     self.state = .recording
 
                     let meeting = Meeting(title: self.meetingTitle)
-                    meeting.audioPath = url.path
+                    meeting.audioFilename = url.lastPathComponent
                     self.currentMeeting = meeting
                     self.modelContext?.insert(meeting)
                     try? self.modelContext?.save()
 
-                    // Show always-on-top indicator
-                    FloatingIndicatorManager.shared.show(isActiveSpeech: false, speakerName: nil)
+                    // Show always-on-top indicator with full controls
+                    FloatingIndicatorManager.shared.show(
+                        isActiveSpeech: false,
+                        speakerName: nil
+                    )
                     
+                    self.updateFloatingIndicator()
                     self.startLiveTranscription()
                     self.startIndicatorUpdates()
                 }
@@ -171,31 +180,55 @@ final class RecordingViewModel {
 
     private func startIndicatorUpdates() {
         Task {
-            while state == .recording {
+            while state == .recording || state == .stopping {
                 try? await Task.sleep(for: .milliseconds(200))
-                
-                let isSpeaking: Bool
-                let statusText: String?
-                
-                if audioManager.isPaused {
-                    isSpeaking = false
-                    statusText = String(localized: "Призупинено")
+                if isFloatingIndicatorVisible {
+                    self.updateFloatingIndicator()
                 } else {
-                    isSpeaking = audioManager.audioLevels.last ?? 0 > 0.1
-                    statusText = liveTranscript.last?.speakerName ?? liveTranscript.last?.speakerID
-                }
-                
-                await MainActor.run {
-                    FloatingIndicatorManager.shared.update(
-                        isActiveSpeech: isSpeaking,
-                        speakerName: statusText
-                    )
+                    await MainActor.run {
+                        FloatingIndicatorManager.shared.hide()
+                    }
                 }
             }
             await MainActor.run {
                 FloatingIndicatorManager.shared.hide()
             }
         }
+    }
+
+    private func updateFloatingIndicator() {
+        let isSpeaking: Bool
+        let speakerText: String?
+        
+        if audioManager.isPaused {
+            isSpeaking = false
+            speakerText = String(localized: "Призупинено")
+        } else {
+            isSpeaking = audioManager.audioLevels.last ?? 0 > 0.1
+            speakerText = liveTranscript.last?.speakerName ?? liveTranscript.last?.speakerID
+        }
+        
+        let lastText = liveTranscript.last?.text
+        
+        FloatingIndicatorManager.shared.update(
+            isActiveSpeech: isSpeaking,
+            isPaused: audioManager.isPaused,
+            speakerName: speakerText,
+            elapsedTime: audioManager.elapsedTime,
+            lastTranscript: lastText,
+            onPause: { [weak self] in
+                Task { @MainActor in self?.pauseRecording() }
+            },
+            onResume: { [weak self] in
+                Task { @MainActor in self?.resumeRecording() }
+            },
+            onStop: { [weak self] in
+                Task { @MainActor in self?.stopRecording() }
+            },
+            onHide: { [weak self] in
+                Task { @MainActor in self?.isFloatingIndicatorVisible = false }
+            }
+        )
     }
 
     // MARK: - Stop Recording
@@ -243,24 +276,33 @@ final class RecordingViewModel {
 
                 guard !Task.isCancelled else { break }
 
+                if isTranscribingLive { continue }
+                
                 let samples = audioManager.consumeAudioChunk()
                 guard !samples.isEmpty else { continue }
 
                 let actualDuration = Double(samples.count) / Constants.whisperSampleRate
 
                 do {
+                    isTranscribingLive = true
+                    let startTime = Date()
+                    
                     let segments = try await transcriptionService.transcribeLive(
                         samples: samples,
                         offset: chunkOffset
                     )
+                    
+                    let duration = Date().timeIntervalSince(startTime)
+                    AppLogger.debug("Live transcription chunk took \(String(format: "%.2f", duration))s (RTF: \(String(format: "%.2f", duration / actualDuration)))")
 
                     await MainActor.run {
                         self.liveTranscript.append(contentsOf: segments)
+                        self.isTranscribingLive = false
                     }
 
                     chunkOffset += actualDuration
                 } catch {
-                    // Don't break on transcription errors during live mode
+                    await MainActor.run { self.isTranscribingLive = false }
                     AppLogger.error("Live transcription chunk error", error: error)
                 }
             }
@@ -302,7 +344,7 @@ final class RecordingViewModel {
             let transcriptURL = Constants.transcriptsDirectory
                 .appendingPathComponent("\(currentMeeting?.filenameBase ?? "transcript").\(Constants.transcriptFileExtension)")
             try document.save(to: transcriptURL)
-            currentMeeting?.transcriptPath = transcriptURL.path
+            currentMeeting?.transcriptFilename = transcriptURL.lastPathComponent
             try? modelContext?.save()
 
         } catch {
@@ -324,7 +366,7 @@ final class RecordingViewModel {
                     try document.save(to: transcriptURL)
                     await MainActor.run {
                         self.fullTranscript = document
-                        self.currentMeeting?.transcriptPath = transcriptURL.path
+                        self.currentMeeting?.transcriptFilename = transcriptURL.lastPathComponent
                         self.currentMeeting?.errorMessage = self.errorMessage
                         try? self.modelContext?.save()
                     }
@@ -374,7 +416,7 @@ final class RecordingViewModel {
                     }
                 }
             } catch {
-                AppLogger.warning("Не вдалося згенерувати назву: \(error.localizedDescription)")
+                AppLogger.warning("Failed to generate meeting title: \(error.localizedDescription)")
             }
 
             // Setup streaming callback
@@ -397,7 +439,7 @@ final class RecordingViewModel {
             let summaryURL = Constants.summariesDirectory
                 .appendingPathComponent("\(currentMeeting?.filenameBase ?? "summary").\(Constants.summaryFileExtension)")
             try summaryResult.write(to: summaryURL, atomically: true, encoding: .utf8)
-            currentMeeting?.summaryPath = summaryURL.path
+            currentMeeting?.summaryFilename = summaryURL.lastPathComponent
 
         } catch {
             await MainActor.run {
@@ -407,10 +449,12 @@ final class RecordingViewModel {
 
         // Complete
         await MainActor.run {
-            state = .complete
             currentMeeting?.status = .complete
-            completedMeetingID = currentMeeting?.id
             try? modelContext?.save()
+            
+            // Wait a tiny bit for DB consistency
+            self.completedMeetingID = currentMeeting?.id
+            state = .complete
 
             // Auto-export to Obsidian if enabled
             if AppSettings.shared.autoExportToObsidian {
@@ -463,6 +507,7 @@ final class RecordingViewModel {
         currentMeeting = nil
         recordingURL = nil
         completedMeetingID = nil
+        isFloatingIndicatorVisible = true
         transcriptionProgressValue = 0
     }
 

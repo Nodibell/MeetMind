@@ -17,11 +17,7 @@ Carthage/Build/
 .build/
 
 ## Root-level files (Build logs)
-build_log*.txt
-build_errors*.txt
-build_warnings*.txt
-build_archive*.txt
-build_report*.txt
+build_*.txt
 
 ## macOS
 .DS_Store
@@ -49,3 +45,7 @@ Export*/
 # MemPalace per-project files (issue #185)
 mempalace.yaml
 entities.json
+
+# Instruments trace
+*.trace
+*.trace/

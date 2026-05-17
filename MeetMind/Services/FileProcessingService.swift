@@ -15,15 +15,15 @@ actor FileProcessingService {
     private var fileMonitor: DispatchSourceFileSystemObject?
     private var isWatching = false
     
-    private let transcriptionService: TranscriptionService
-    private let llmService: LLMService
+    private let transcriptionService: any TranscriptionProvider
+    private let llmService: any LLMProvider
     
     var onFileProcessed: (@Sendable (String, MeetingTranscriptDocument, String) -> Void)?
     var onError: (@Sendable (String, Error) -> Void)?
     
     // MARK: - Initialization
     
-    init(transcriptionService: TranscriptionService, llmService: LLMService) {
+    init(transcriptionService: any TranscriptionProvider, llmService: any LLMProvider) {
         self.transcriptionService = transcriptionService
         self.llmService = llmService
         Task {
@@ -103,7 +103,7 @@ actor FileProcessingService {
             let transcript = try await transcriptionService.transcribeFile(at: fileURL)
 
             // Summarize
-            let summary = try await llmService.generateSummary(transcript: transcript.fullText)
+            let summary = try await llmService.generateSummary(transcript: transcript.fullText, targetLanguage: nil)
 
             // Mark as processed
             processedFiles.insert(identity)
@@ -128,7 +128,7 @@ actor FileProcessingService {
     
     func processFile(at url: URL) async throws -> (MeetingTranscriptDocument, String) {
         let transcript = try await transcriptionService.transcribeFile(at: url)
-        let summary = try await llmService.generateSummary(transcript: transcript.fullText)
+        let summary = try await llmService.generateSummary(transcript: transcript.fullText, targetLanguage: nil)
 
         // Mark as processed using lightweight identity
         if let identity = fileIdentity(for: url) {

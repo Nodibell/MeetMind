@@ -97,6 +97,7 @@ final class MeetMindDiarizationEngine {
         }
 
         state = .diarizing(progress: "Processing audio...")
+        let startTime = CFAbsoluteTimeGetCurrent()
         Self.logger.info("🔬 Starting offline diarization: \(samples.count) samples (\(Double(samples.count) / sampleRate, privacy: .public)s)")
 
         do {
@@ -110,8 +111,9 @@ final class MeetMindDiarizationEngine {
                 )
             }
 
+            let duration = CFAbsoluteTimeGetCurrent() - startTime
             state = .modelsReady
-            Self.logger.info("✅ Diarization complete: \(segments.count) segments, \(Set(segments.map(\.speakerID)).count) speakers detected.")
+            Self.logger.info("✅ Diarization complete: \(segments.count) segments, \(Set(segments.map(\.speakerID)).count) speakers detected. Time: \(String(format: "%.2f", duration))s")
             return segments
         } catch {
             state = .error("Diarization failed: \(error.localizedDescription)")
@@ -132,6 +134,7 @@ final class MeetMindDiarizationEngine {
         }
 
         state = .diarizing(progress: "Processing file...")
+        let startTime = CFAbsoluteTimeGetCurrent()
         Self.logger.info("🔬 Starting offline diarization from file: \(fileURL.lastPathComponent, privacy: .public)")
 
         do {
@@ -148,8 +151,9 @@ final class MeetMindDiarizationEngine {
                 )
             }
 
+            let duration = CFAbsoluteTimeGetCurrent() - startTime
             state = .modelsReady
-            Self.logger.info("✅ File diarization complete: \(segments.count) segments, \(Set(segments.map(\.speakerID)).count) speakers.")
+            Self.logger.info("✅ File diarization complete: \(segments.count) segments, \(Set(segments.map(\.speakerID)).count) speakers. Time: \(String(format: "%.2f", duration))s")
             return (segments, lastEmbeddings)
         } catch {
             state = .error("File diarization failed: \(error.localizedDescription)")

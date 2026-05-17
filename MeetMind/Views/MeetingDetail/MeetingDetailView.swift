@@ -51,9 +51,11 @@ struct MeetingDetailView: View {
                     speakerMetadata: viewModel.meeting.speakerMetadata,
                     isLoading: viewModel.isLoadingTranscript,
                     translatedText: viewModel.translatedTranscript,
+                    translatedSegments: viewModel.translatedSegments,
                     isTranslating: viewModel.isTranslatingTranscript,
                     onClearTranslation: {
                         viewModel.translatedTranscript = nil
+                        viewModel.translatedSegments = [:]
                     },
                     onUpdateSpeakerName: { id, name in
                         viewModel.updateSpeakerName(id: id, newName: name)

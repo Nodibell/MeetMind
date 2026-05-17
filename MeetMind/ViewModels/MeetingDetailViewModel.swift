@@ -34,7 +34,7 @@ final class MeetingDetailViewModel {
     }
     
     // MARK: - Services
-    private let llmService: LLMService
+    private let llmService: any LLMProvider
     private var modelContext: ModelContext?
     private var summaryTask: Task<Void, Never>?
     
@@ -48,7 +48,7 @@ final class MeetingDetailViewModel {
     
     // MARK: - Init
     
-    init(meeting: Meeting, llmService: LLMService) {
+    init(meeting: Meeting, llmService: any LLMProvider) {
         self.meeting = meeting
         self.meetingTitle = meeting.title
         self.selectedSummaryLanguage = meeting.summaryLanguage ?? AppSettings.shared.summaryLanguage
@@ -69,11 +69,32 @@ final class MeetingDetailViewModel {
         if meeting.speakerMetadata.allSatisfy({ $0.name == nil }) {
             await autoDetectSpeakerNames()
         }
+        
+        // Auto-detect title if still default
+        if meeting.title == "Нова нарада" || meeting.title.isEmpty {
+            await autoDetectTitle()
+        }
+    }
+    
+    private func autoDetectTitle() async {
+        guard let transcriptText = transcript?.fullText, !transcriptText.isEmpty else { return }
+        
+        do {
+            let newTitle = try await llmService.generateTitle(transcript: transcriptText)
+            if !newTitle.isEmpty {
+                await MainActor.run {
+                    self.meetingTitle = newTitle
+                    self.meeting.title = newTitle
+                    try? self.modelContext?.save()
+                }
+            }
+        } catch {
+            AppLogger.warning("Failed to auto-detect meeting title: \(error)")
+        }
     }
     
     private func loadTranscript() async {
-        guard let path = meeting.transcriptPath else { return }
-        let url = URL(fileURLWithPath: path)
+        guard let url = meeting.transcriptURL else { return }
         
         isLoadingTranscript = true
         defer { isLoadingTranscript = false }
@@ -89,8 +110,7 @@ final class MeetingDetailViewModel {
     }
     
     private func loadSummary() async {
-        guard let path = meeting.summaryPath else { return }
-        let url = URL(fileURLWithPath: path)
+        guard let url = meeting.summaryURL else { return }
         
         isLoadingSummary = true
         defer { isLoadingSummary = false }
@@ -167,16 +187,18 @@ final class MeetingDetailViewModel {
 
     // MARK: - Transcript Translation
     var translatedTranscript: String? = nil
+    var translatedSegments: [UUID: String] = [:]
     var isTranslatingTranscript: Bool = false
     private var translationTask: Task<Void, Never>?
     
     func translateTranscript(to languageName: String) async {
-        guard let transcriptText = transcript?.fullText, !transcriptText.isEmpty else { return }
+        guard let segments = transcript?.segments, !segments.isEmpty else { return }
         
         await MainActor.run {
             isTranslatingTranscript = true
             translatedTranscript = ""
             errorMessage = nil
+            translatedSegments = [:]
         }
         
         translationTask?.cancel()
@@ -184,18 +206,68 @@ final class MeetingDetailViewModel {
         await llmService.setOnTokenReceived { [weak self] token in
             guard let self else { return }
             Task { @MainActor in
-                if self.translatedTranscript == nil {
-                    self.translatedTranscript = token
-                } else {
-                    self.translatedTranscript! += token
-                }
+                self.translatedTranscript = (self.translatedTranscript ?? "") + token
             }
         }
         
         translationTask = Task {
             do {
-                _ = try await llmService.translateText(text: transcriptText, to: languageName)
+                // Build a structured text with line numbering to help preserve segment boundaries
+                var structuredLines: [String] = []
+                for (index, segment) in segments.enumerated() {
+                    structuredLines.append("\(index + 1): \(segment.text)")
+                }
+                let combinedText = structuredLines.joined(separator: "\n")
+                
+                // Call standard translation API which internally supports DeepMLX/Ollama/LMStudio
+                let resultText = try await llmService.translateText(text: combinedText, to: languageName)
+                
+                // Parse the response
+                var parsedTranslations: [UUID: String] = [:]
+                let lines = resultText.components(separatedBy: .newlines)
+                
+                for line in lines {
+                    let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty else { continue }
+                    
+                    if let colonIndex = trimmed.firstIndex(of: ":") {
+                        let prefix = trimmed[..<colonIndex].trimmingCharacters(in: .whitespacesAndNewlines)
+                        if let indexVal = Int(prefix), indexVal > 0, indexVal <= segments.count {
+                            let translatedContent = trimmed[trimmed.index(after: colonIndex)...].trimmingCharacters(in: .whitespacesAndNewlines)
+                            let segmentID = segments[indexVal - 1].id
+                            parsedTranslations[segmentID] = translatedContent
+                        }
+                    }
+                }
+                
+                // Fallback: If some lines failed to parse prefix, map clean lines sequentially
+                if parsedTranslations.count < segments.count {
+                    AppLogger.warning("Parsing matched only \(parsedTranslations.count)/\(segments.count) segments. Falling back to sequential alignment.")
+                    
+                    let cleanLines = lines.map { line -> String in
+                        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if let colonIndex = trimmed.firstIndex(of: ":") {
+                            let prefix = trimmed[..<colonIndex].trimmingCharacters(in: .whitespacesAndNewlines)
+                            if Int(prefix) != nil {
+                                return String(trimmed[trimmed.index(after: colonIndex)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                            }
+                        }
+                        return trimmed
+                    }.filter { !$0.isEmpty }
+                    
+                    for (index, segment) in segments.enumerated() {
+                        if parsedTranslations[segment.id] == nil {
+                            if index < cleanLines.count {
+                                parsedTranslations[segment.id] = cleanLines[index]
+                            } else {
+                                parsedTranslations[segment.id] = segment.text
+                            }
+                        }
+                    }
+                }
+                
                 await MainActor.run {
+                    self.translatedSegments = parsedTranslations
                     self.isTranslatingTranscript = false
                 }
             } catch {
@@ -242,8 +314,8 @@ final class MeetingDetailViewModel {
                 }
 
                 // Save updated summary
-                if let path = meeting.summaryPath {
-                    try? newSummary.write(toFile: path, atomically: true, encoding: .utf8)
+                if let url = meeting.summaryURL {
+                    try? newSummary.write(to: url, atomically: true, encoding: .utf8)
                 }
             } catch {
                 await MainActor.run {
@@ -319,7 +391,7 @@ final class MeetingDetailViewModel {
         meeting.title = trimmed
         meetingTitle = trimmed
         try? modelContext?.save()
-        AppLogger.info("Назву наради змінено на: \(trimmed)")
+        AppLogger.info("Meeting title changed to: \(trimmed)")
     }
     
     // MARK: - Transcript Actions
@@ -368,7 +440,7 @@ final class MeetingDetailViewModel {
                 }
             }
         } catch {
-            AppLogger.error("Помилка автовизначення імен спікерів: \(error)")
+            AppLogger.error("Failed to auto-detect speaker names: \(error)")
         }
     }
 }

@@ -19,7 +19,6 @@ struct AudioWaveformView: View {
             let totalBars = min(barCount, levels.count)
             let availableWidth = geo.size.width - CGFloat(max(0, totalBars - 1)) * barSpacing
             let barWidth = max(availableWidth / CGFloat(max(1, totalBars)), 2)
-            let centerY = geo.size.height / 2
             let maxBarHeight = geo.size.height * 0.85
             
             HStack(spacing: barSpacing) {

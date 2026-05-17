@@ -33,7 +33,7 @@ struct SettingsView: View {
                 filesTab
             }
         }
-        .frame(width: 550, height: 420)
+        .frame(width: 680, height: 500)
     }
 
     // MARK: - General Tab
@@ -50,6 +50,12 @@ struct SettingsView: View {
                     ForEach(AppSettings.supportedLanguages, id: \.code) { lang in
                         Text(lang.name).tag(lang.code)
                     }
+                }
+
+                Picker("Мова резюме (за замовчуванням)", selection: $viewModel.settings.summaryLanguage) {
+                    Text("Мова транскрипту").tag("auto")
+                    Text("Англійська").tag("en")
+                    Text("Українська").tag("uk")
                 }
 
                 Text("Мова використовується для транскрипції та аналізу")
@@ -147,47 +153,113 @@ struct SettingsView: View {
                 .pickerStyle(.segmented)
             }
 
-            Section("Підключення") {
-                TextField("Endpoint", text: $viewModel.settings.llmEndpoint)
-
-                HStack {
-                    statusIndicator
-
-                    Spacer()
-
-                    Button(viewModel.isCheckingOllama ? "Перевірка..." : "Перевірити з'єднання") {
-                        Task { await viewModel.checkOllamaConnection() }
+            if viewModel.settings.llmProvider == .deepMLX {
+                Section("Локальна MLX Модель") {
+                    HStack {
+                        if let path = viewModel.settings.deepMLXModelPath {
+                            Text(path.path)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        } else {
+                            Text("Шлях до моделі MLX не обрано")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button("Обрати папку моделі MLX") {
+                            viewModel.pickDeepMLXModelFolder()
+                        }
                     }
-                    .disabled(viewModel.isCheckingOllama)
+                    
+                    if let compatibility = viewModel.deepMLXModelCompatibility {
+                        Label(
+                            deepMLXCompatibilityText(compatibility),
+                            systemImage: compatibility.isSupported ? "checkmark.circle.fill" : "xmark.circle.fill"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(compatibility.isSupported ? Theme.Colors.success : Theme.Colors.error)
+                    }
+                    
+                    Text("DeepMLX завантажує MLX-моделі безпосередньо в MeetMind через Apple Silicon Metal. Модель автоматично вивантажується з пам'яті (VRAM) одразу після завершення аналізу.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                
-                if viewModel.settings.llmProvider == .lmStudio {
-                    Text("Для LM Studio вкажіть адресу локального сервера (напр. http://localhost:1234/v1)")
+            } else {
+                Section("Підключення") {
+                    TextField("Endpoint", text: $viewModel.settings.llmEndpoint)
+
+                    HStack {
+                        statusIndicator
+
+                        Spacer()
+
+                        Button(viewModel.isCheckingOllama ? "Перевірка..." : "Перевірити з'єднання") {
+                            Task { await viewModel.checkOllamaConnection() }
+                        }
+                        .disabled(viewModel.isCheckingOllama)
+                    }
+                    
+                    if viewModel.settings.llmProvider == .lmStudio {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Для LM Studio вкажіть адресу локального сервера (напр. http://localhost:1234)")
+                            Link("Завантажити LM Studio", destination: URL(string: "https://lmstudio.ai")!)
+                                .font(.caption)
+                        }
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                } else {
-                    Text("Для Ollama вкажіть адресу сервера (напр. http://localhost:11434)")
+                    } else if viewModel.settings.llmProvider == .ollama {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Для Ollama вкажіть адресу сервера (напр. http://localhost:11434)")
+                            Link("Завантажити Ollama", destination: URL(string: "https://ollama.com")!)
+                                .font(.caption)
+                        }
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    }
+                }
+
+                Section("Модель") {
+                    if viewModel.availableModels.isEmpty {
+                        TextField("Модель", text: $viewModel.settings.llmModel)
+                    } else {
+                        Picker("Модель", selection: $viewModel.settings.llmModel) {
+                            ForEach(viewModel.availableModels, id: \.self) { model in
+                                Text(model).tag(model)
+                            }
+                            if !viewModel.availableModels.contains(viewModel.settings.llmModel) && !viewModel.settings.llmModel.isEmpty {
+                                Text("\(viewModel.settings.llmModel) (custom)").tag(viewModel.settings.llmModel)
+                            }
+                        }
+                    }
+
+                    if viewModel.settings.llmProvider == .ollama {
+                        Text("Рекомендовані: gemma3:12b, qwen2.5:14b (підтримують українську)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    
+                    if let warning = viewModel.selectedLLMModelWarning {
+                        Label(warning, systemImage: "info.circle")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
                 }
             }
 
-            Section("Модель") {
-                if viewModel.availableModels.isEmpty {
-                    TextField("Модель", text: $viewModel.settings.llmModel)
-                } else {
-                    Picker("Модель", selection: $viewModel.settings.llmModel) {
-                        ForEach(viewModel.availableModels, id: \.self) { model in
-                            Text(model).tag(model)
-                        }
-                    }
+            Section("Керування пам'яттю (VRAM / RAM)") {
+                Picker("Вивантаження моделі", selection: $viewModel.settings.llmModelUnloadTimeout) {
+                    Text("Вивантажити одразу").tag(0)
+                    Text("Через 1 хвилину").tag(60)
+                    Text("Через 5 хвилин").tag(300)
+                    Text("Через 10 хвилин").tag(600)
+                    Text("Не вивантажувати").tag(-1)
                 }
-
-                if viewModel.settings.llmProvider == .ollama {
-                    Text("Рекомендовані: gemma3:12b, qwen2.5:14b (підтримують українську)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                
+                Text("Керує тим, коли завантажена модель вивантажується з пам'яті комп'ютера після останнього запиту. Це дозволяє економити ресурси відеокарти та оперативної пам'яті вашого Mac.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Додатковий Промпт для Резюме") {
@@ -213,6 +285,22 @@ struct SettingsView: View {
         .task {
             await viewModel.checkOllamaConnection()
         }
+        .onChange(of: viewModel.settings.llmProvider) { _, _ in
+            viewModel.availableModels = []
+            Task { await viewModel.checkOllamaConnection() }
+        }
+        .onChange(of: viewModel.settings.llmModel) { _, _ in
+            guard viewModel.settings.llmProvider == .lmStudio else { return }
+            Task { await viewModel.checkOllamaConnection() }
+        }
+    }
+    
+    private func deepMLXCompatibilityText(_ compatibility: DeepLLMService.ModelCompatibility) -> String {
+        if compatibility.isSupported {
+            return "MLX підтримує model_type '\(compatibility.modelType ?? "unknown")'"
+        }
+        
+        return "DeepMLX не підтримає цю папку: \(compatibility.issue ?? "невідома причина")"
     }
 
     @ViewBuilder

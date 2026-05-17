@@ -24,6 +24,15 @@ final class SettingsViewModel {
 
     // Settings (bound to AppSettings)
     var settings = AppSettings.shared
+    
+    var deepMLXModelCompatibility: DeepLLMService.ModelCompatibility? {
+        guard let path = settings.deepMLXModelPath else { return nil }
+        return DeepLLMService.modelCompatibility(at: path)
+    }
+    
+    var selectedLLMModelWarning: String? {
+        LLMService.modelSelectionWarning(model: settings.llmModel, provider: settings.llmProvider)
+    }
 
     enum OllamaStatus: Equatable {
         case unknown
@@ -32,10 +41,10 @@ final class SettingsViewModel {
         case disconnected(String)
     }
 
-    private let llmService: LLMService
-    let audioManager: AudioManager
+    private let llmService: any LLMProvider
+    let audioManager: any AudioProvider
 
-    init(llmService: LLMService, audioManager: AudioManager) {
+    init(llmService: any LLMProvider, audioManager: any AudioProvider) {
         self.llmService = llmService
         self.audioManager = audioManager
     }
@@ -55,6 +64,10 @@ final class SettingsViewModel {
                 ollamaStatus = .connected
                 if case .available(let models) = state {
                     self.availableModels = models
+                    if !models.isEmpty,
+                       !LLMService.isModelAvailable(settings.llmModel, in: models, provider: settings.llmProvider) {
+                        settings.llmModel = models[0]
+                    }
                 }
             } else {
                 if case .unavailable(let reason) = state {
@@ -112,7 +125,34 @@ final class SettingsViewModel {
                     self.availableSystemAudioSources = sources
                 }
             } catch {
-                AppLogger.error("Помилка отримання списку джерел системного аудіо: \(error)")
+                AppLogger.error("Failed to fetch system audio sources: \(error)")
+            }
+        }
+    }
+    
+    // MARK: - DeepMLX Model Picker
+    func pickDeepMLXModelFolder() {
+        let panel = NSOpenPanel()
+        panel.title = "Оберіть папку моделі MLX"
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = false
+        panel.allowsMultipleSelection = false
+
+        if panel.runModal() == .OK, let url = panel.url {
+            settings.deepMLXModelPath = url
+            
+            let compatibility = DeepLLMService.modelCompatibility(at: url)
+            if !compatibility.isSupported {
+                let alert = NSAlert()
+                alert.alertStyle = .warning
+                alert.messageText = "Модель не підтримується DeepMLX"
+                alert.informativeText = """
+                \(compatibility.issue ?? "Невідома причина")
+
+                Для DeepMLX потрібна MLX-модель із підтримуваним model_type у config.json.
+                """
+                alert.runModal()
             }
         }
     }

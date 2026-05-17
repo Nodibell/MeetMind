@@ -14,6 +14,7 @@ struct TranscriptPanelView: View {
     var speakerMetadata: [SpeakerMetadata] = []
     var isLoading: Bool = false
     var translatedText: String? = nil
+    var translatedSegments: [UUID: String] = [:]
     var isTranslating: Bool = false
     var onClearTranslation: (() -> Void)? = nil
     var onUpdateSpeakerName: ((String, String) -> Void)? = nil
@@ -66,7 +67,7 @@ struct TranscriptPanelView: View {
                         .foregroundStyle(Theme.Colors.textSecondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let translatedText = translatedText {
+            } else if let translatedText = translatedText, translatedSegments.isEmpty {
                 ScrollView {
                     VStack(alignment: .leading) {
                         HStack {
@@ -92,7 +93,33 @@ struct TranscriptPanelView: View {
             } else if segments.isEmpty {
                 emptyState
             } else {
-                transcriptContent
+                VStack(spacing: 0) {
+                    if !translatedSegments.isEmpty {
+                        HStack {
+                            Label("Переклад активний (таймстампи збережено)", systemImage: "globe")
+                                .font(Theme.Typography.caption)
+                                .fontWeight(.medium)
+                                .foregroundStyle(Theme.Colors.accentPrimary)
+                            
+                            Spacer()
+                            
+                            Button(action: { onClearTranslation?() }) {
+                                HStack(spacing: 4) {
+                                    Text("Показати оригінал")
+                                        .font(Theme.Typography.caption)
+                                    Image(systemName: "xmark.circle.fill")
+                                }
+                                .foregroundStyle(Theme.Colors.textSecondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, Theme.Spacing.lg)
+                        .padding(.vertical, Theme.Spacing.sm)
+                        .background(Theme.Colors.accentPrimary.opacity(0.08))
+                    }
+                    
+                    transcriptContent
+                }
             }
         }
         .background(Theme.Colors.backgroundSecondary.opacity(0.3))
@@ -107,6 +134,7 @@ struct TranscriptPanelView: View {
                     ForEach(segments) { segment in
                         TranscriptDetailRow(
                             segment: segment,
+                            translatedText: translatedSegments[segment.id],
                             isHighlighted: segment.id == highlightedSegmentID,
                             searchText: searchText,
                             metadata: speakerMetadata.first(where: { $0.id == segment.speakerID }),
@@ -166,6 +194,7 @@ struct TranscriptPanelView: View {
 
 struct TranscriptDetailRow: View {
     let segment: MeetingTranscriptSegment
+    var translatedText: String? = nil
     var isHighlighted: Bool = false
     var searchText: String = ""
     var metadata: SpeakerMetadata?
@@ -198,12 +227,12 @@ struct TranscriptDetailRow: View {
             
             // Text
             VStack(alignment: .leading, spacing: 4) {
-                if let speakerID = segment.speakerID {
+                if segment.speakerID != nil {
                     Button {
                         newSpeakerName = metadata?.name ?? ""
                         isEditingSpeaker = true
                     } label: {
-                        Text(metadata?.displayName ?? segment.speakerName ?? segment.speakerID)
+                        Text(metadata?.displayName ?? segment.speakerName ?? segment.speakerID ?? String(localized: "Невідомий"))
                             .font(Theme.Typography.caption)
                             .fontWeight(.bold)
                             .foregroundStyle(metadata?.color ?? Theme.Colors.accentPrimary)
@@ -248,7 +277,7 @@ struct TranscriptDetailRow: View {
                     }
                 }
                 
-                Text(segment.text)
+                Text(translatedText ?? segment.text)
                     .font(Theme.Typography.body)
                     .foregroundStyle(Theme.Colors.textPrimary)
                     .textSelection(.enabled)
@@ -259,4 +288,9 @@ struct TranscriptDetailRow: View {
         .padding(.vertical, Theme.Spacing.sm)
         .background(isHighlighted ? (metadata?.color.opacity(0.08) ?? Theme.Colors.accentPrimary.opacity(0.08)) : .clear)
     }
+}
+
+
+#Preview {
+    TranscriptPanelView(segments: [MeetingTranscriptSegment(startTime: TimeInterval(1095), endTime: TimeInterval(1100), text: "Hello!, This is the showcase!")], searchText: .constant("Searching"))
 }

@@ -46,10 +46,10 @@ final class Meeting {
     var duration: TimeInterval
     var language: String
     var tags: [String]
-    var transcriptPath: String?
-    var summaryPath: String?
+    var transcriptFilename: String?
+    var summaryFilename: String?
     var summaryLanguage: String? // Language selected for THIS meeting's summary
-    var audioPath: String?
+    var audioFilename: String?
     @Attribute var statusRaw: String
     var isExportedToObsidian: Bool
     var errorMessage: String?
@@ -79,6 +79,21 @@ final class Meeting {
     }
     
     // MARK: - Computed Properties
+    
+    var transcriptURL: URL? {
+        guard let name = transcriptFilename else { return nil }
+        return Constants.transcriptsDirectory.appendingPathComponent(name)
+    }
+    
+    var summaryURL: URL? {
+        guard let name = summaryFilename else { return nil }
+        return Constants.summariesDirectory.appendingPathComponent(name)
+    }
+    
+    var audioURL: URL? {
+        guard let name = audioFilename else { return nil }
+        return Constants.recordingsDirectory.appendingPathComponent(name)
+    }
     
     var displayDate: String {
         date.shortDisplayFormatted

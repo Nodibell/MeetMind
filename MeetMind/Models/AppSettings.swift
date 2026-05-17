@@ -30,6 +30,9 @@ final class AppSettings: @unchecked Sendable {
         static let llmProvider              = "llmProvider"
         static let llmModel                 = "llmModel"
         static let llmEndpoint              = "llmEndpoint"
+        static let ollamaEndpoint           = "ollamaEndpoint"
+        static let lmStudioEndpoint         = "lmStudioEndpoint"
+        static let deepMLXModelPath         = "deepMLXModelPath"
         static let customSummaryPrompt      = "customSummaryPrompt"
         static let whisperModelLive         = "whisperModelLive"
         static let whisperModelPost         = "whisperModelPost"
@@ -37,6 +40,7 @@ final class AppSettings: @unchecked Sendable {
         static let autoProcessWatchFolder   = "autoProcessWatchFolder"
         static let appLanguage              = "appLanguage"
         static let waveformFPS              = "waveformFPS"
+        static let llmModelUnloadTimeout    = "llmModelUnloadTimeout"
     }
 
     // MARK: - App Language
@@ -108,20 +112,50 @@ final class AppSettings: @unchecked Sendable {
         didSet { UserDefaults.standard.set(llmModel, forKey: Keys.llmModel) }
     }
 
+    var ollamaEndpoint: String {
+        didSet { UserDefaults.standard.set(ollamaEndpoint, forKey: Keys.ollamaEndpoint) }
+    }
+
+    var lmStudioEndpoint: String {
+        didSet { UserDefaults.standard.set(lmStudioEndpoint, forKey: Keys.lmStudioEndpoint) }
+    }
+
     var llmEndpoint: String {
-        didSet { UserDefaults.standard.set(llmEndpoint, forKey: Keys.llmEndpoint) }
+        get {
+            switch llmProvider {
+            case .ollama: return ollamaEndpoint
+            case .lmStudio: return lmStudioEndpoint
+            case .deepMLX: return ""
+            }
+        }
+        set {
+            switch llmProvider {
+            case .ollama: ollamaEndpoint = newValue
+            case .lmStudio: lmStudioEndpoint = newValue
+            case .deepMLX: break
+            }
+        }
     }
 
     var customSummaryPrompt: String {
         didSet { UserDefaults.standard.set(customSummaryPrompt, forKey: Keys.customSummaryPrompt) }
     }
-    
+
+    /// Security-scoped URL to the selected DeepMLX model folder
+    var deepMLXModelPath: URL? {
+        didSet { saveBookmark(deepMLXModelPath, forKey: Keys.deepMLXModelPath) }
+    }
+
     var enableSharding: Bool {
         didSet { UserDefaults.standard.set(enableSharding, forKey: "enableSharding") }
     }
     
     var enablePrefetch: Bool {
         didSet { UserDefaults.standard.set(enablePrefetch, forKey: "enablePrefetch") }
+    }
+    
+    var llmModelUnloadTimeout: Int {
+        didSet { UserDefaults.standard.set(llmModelUnloadTimeout, forKey: Keys.llmModelUnloadTimeout) }
     }
 
     // MARK: - Whisper Models
@@ -173,8 +207,14 @@ final class AppSettings: @unchecked Sendable {
             llmProvider = .ollama
         }
         llmModel                = UserDefaults.standard.string(forKey: Keys.llmModel) ?? UserDefaults.standard.string(forKey: "ollamaModel") ?? Constants.defaultOllamaModel
-        llmEndpoint             = UserDefaults.standard.string(forKey: Keys.llmEndpoint) ?? UserDefaults.standard.string(forKey: "ollamaEndpoint") ?? Constants.defaultOllamaEndpoint
+        
+        let legacyEndpoint = UserDefaults.standard.string(forKey: Keys.llmEndpoint) ?? UserDefaults.standard.string(forKey: "ollamaEndpoint")
+        
+        ollamaEndpoint          = UserDefaults.standard.string(forKey: Keys.ollamaEndpoint) ?? legacyEndpoint ?? Constants.defaultOllamaEndpoint
+        lmStudioEndpoint        = UserDefaults.standard.string(forKey: Keys.lmStudioEndpoint) ?? Constants.defaultLMStudioEndpoint
+        
         customSummaryPrompt     = UserDefaults.standard.string(forKey: Keys.customSummaryPrompt) ?? ""
+        llmModelUnloadTimeout   = UserDefaults.standard.object(forKey: Keys.llmModelUnloadTimeout) as? Int ?? 60
         enableSharding          = UserDefaults.standard.object(forKey: "enableSharding") as? Bool ?? true
         enablePrefetch          = UserDefaults.standard.object(forKey: "enablePrefetch") as? Bool ?? true
 
@@ -199,6 +239,7 @@ final class AppSettings: @unchecked Sendable {
         // --- Security-scoped bookmarks ---
         obsidianVaultPath = AppSettings.resolveBookmark(forKey: Keys.obsidianVaultPath)
         watchFolderPath   = AppSettings.resolveBookmark(forKey: Keys.watchFolderPath)
+        deepMLXModelPath  = AppSettings.resolveBookmark(forKey: Keys.deepMLXModelPath)
     }
 
     // MARK: - Bookmark Helpers
@@ -208,6 +249,11 @@ final class AppSettings: @unchecked Sendable {
             UserDefaults.standard.removeObject(forKey: key)
             return
         }
+        
+        // Start accessing before creating bookmark data
+        let accessGranted = url.startAccessingSecurityScopedResource()
+        defer { if accessGranted { url.stopAccessingSecurityScopedResource() } }
+        
         do {
             let data = try url.bookmarkData(
                 options: .withSecurityScope,
@@ -215,6 +261,7 @@ final class AppSettings: @unchecked Sendable {
                 relativeTo: nil
             )
             UserDefaults.standard.set(data, forKey: key)
+            AppLogger.info("Successfully saved security-scoped bookmark for \(key)")
         } catch {
             AppLogger.error("Failed to save security-scoped bookmark for \(key)", error: error)
         }

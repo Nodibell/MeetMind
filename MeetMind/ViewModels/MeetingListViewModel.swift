@@ -35,13 +35,13 @@ final class MeetingListViewModel {
         // Clean up associated files
         let fm = FileManager.default
         
-        if let audioPath = meeting.audioPath {
+        if let audioPath = meeting.audioURL?.path {
             try? fm.removeItem(atPath: audioPath)
         }
-        if let transcriptPath = meeting.transcriptPath {
+        if let transcriptPath = meeting.transcriptURL?.path {
             try? fm.removeItem(atPath: transcriptPath)
         }
-        if let summaryPath = meeting.summaryPath {
+        if let summaryPath = meeting.summaryURL?.path {
             try? fm.removeItem(atPath: summaryPath)
         }
         

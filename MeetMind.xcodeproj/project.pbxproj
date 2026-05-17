@@ -10,6 +10,8 @@
 		31B3A748CFDADEA68CDE40EE /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5017A4C7AE0A453E64992C44 /* Foundation.framework */; };
 		4321F5725102B5645B211094 /* AppSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65026034DB6EE24C4B3B37DE /* AppSettingsTests.swift */; };
 		4C1507582FAB90E0007C784F /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4C1507572FAB90E0007C784F /* WhisperKit */; };
+		4CBAB1FB2FB8ACB900098DEC /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = 4CBAB1FA2FB8ACB900098DEC /* MLXLLM */; };
+		4CBAB1FD2FB8ACB900098DEC /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 4CBAB1FC2FB8ACB900098DEC /* MLXLMCommon */; };
 		5C780215514CAF440FE1B77C /* LLMServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD18B9F1ACC65366B7756B10 /* LLMServiceTests.swift */; };
 		EBFCFF4796D7061B0C2285F6 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = D6AC83B81297D9491D198D6A /* FluidAudio */; };
 /* End PBXBuildFile section */
@@ -66,7 +68,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4CBAB1FB2FB8ACB900098DEC /* MLXLLM in Frameworks */,
 				4C1507582FAB90E0007C784F /* WhisperKit in Frameworks */,
+				4CBAB1FD2FB8ACB900098DEC /* MLXLMCommon in Frameworks */,
 				EBFCFF4796D7061B0C2285F6 /* FluidAudio in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -99,7 +103,6 @@
 				65026034DB6EE24C4B3B37DE /* AppSettingsTests.swift */,
 				FD18B9F1ACC65366B7756B10 /* LLMServiceTests.swift */,
 			);
-			name = MeetMindTests;
 			path = MeetMindTests;
 			sourceTree = "<group>";
 		};
@@ -159,6 +162,8 @@
 			packageProductDependencies = (
 				4C1507572FAB90E0007C784F /* WhisperKit */,
 				D6AC83B81297D9491D198D6A /* FluidAudio */,
+				4CBAB1FA2FB8ACB900098DEC /* MLXLLM */,
+				4CBAB1FC2FB8ACB900098DEC /* MLXLMCommon */,
 			);
 			productName = MeetMind;
 			productReference = 4CDCD3462FAB7C4900DCA3CB /* MeetMind.app */;
@@ -172,7 +177,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2640;
-				LastUpgradeCheck = 2640;
+				LastUpgradeCheck = 2650;
 				TargetAttributes = {
 					4CDCD3452FAB7C4900DCA3CB = {
 						CreatedOnToolsVersion = 26.4.1;
@@ -191,6 +196,7 @@
 			packageReferences = (
 				4C1507562FAB90E0007C784F /* XCRemoteSwiftPackageReference "argmax-oss-swift" */,
 				AA0000012FAB90E0007C784F /* XCRemoteSwiftPackageReference "FluidAudio" */,
+				4CBAB1F92FB8ACB900098DEC /* XCRemoteSwiftPackageReference "mlx-swift-examples" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 4CDCD3472FAB7C4900DCA3CB /* Products */;
@@ -283,6 +289,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 72UFS7AJ5R;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -308,6 +315,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -347,6 +355,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 72UFS7AJ5R;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -365,6 +374,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 			};
 			name = Release;
@@ -377,7 +387,8 @@
 				CODE_SIGN_ENTITLEMENTS = MeetMind/MeetMind.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 20;
+				CURRENT_PROJECT_VERSION = 23;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 72UFS7AJ5R;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -386,6 +397,7 @@
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MeetMind/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = MeetMind;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "MeetMind потребує доступ до мікрофона для запису та транскрипції нарад.";
@@ -393,7 +405,8 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.2.14;
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MARKETING_VERSION = 1.3.3;
 				PRODUCT_BUNDLE_IDENTIFIER = oleksii.chumak.MeetMind;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -414,7 +427,8 @@
 				CODE_SIGN_ENTITLEMENTS = MeetMind/MeetMind.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 20;
+				CURRENT_PROJECT_VERSION = 23;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 72UFS7AJ5R;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -423,6 +437,7 @@
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MeetMind/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = MeetMind;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "MeetMind потребує доступ до мікрофона для запису та транскрипції нарад.";
@@ -430,7 +445,8 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.2.14;
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MARKETING_VERSION = 1.3.3;
 				PRODUCT_BUNDLE_IDENTIFIER = oleksii.chumak.MeetMind;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -447,6 +463,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.nodibell.MeetMindTests;
 				PRODUCT_MODULE_NAME = MeetMindTests;
@@ -460,6 +477,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.nodibell.MeetMindTests;
 				PRODUCT_MODULE_NAME = MeetMindTests;
@@ -510,7 +528,14 @@
 				kind = branch;
 			};
 		};
-/* End XCRemoteSwiftPackageReference section */
+		4CBAB1F92FB8ACB900098DEC /* XCRemoteSwiftPackageReference "mlx-swift-examples" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ml-explore/mlx-swift-examples";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.29.1;
+			};
+		};
 		AA0000012FAB90E0007C784F /* XCRemoteSwiftPackageReference "FluidAudio" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/FluidInference/FluidAudio.git";
@@ -519,12 +544,23 @@
 				minimumVersion = 0.12.4;
 			};
 		};
+/* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		4C1507572FAB90E0007C784F /* WhisperKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 4C1507562FAB90E0007C784F /* XCRemoteSwiftPackageReference "argmax-oss-swift" */;
 			productName = WhisperKit;
+		};
+		4CBAB1FA2FB8ACB900098DEC /* MLXLLM */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4CBAB1F92FB8ACB900098DEC /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
+			productName = MLXLLM;
+		};
+		4CBAB1FC2FB8ACB900098DEC /* MLXLMCommon */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4CBAB1F92FB8ACB900098DEC /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
+			productName = MLXLMCommon;
 		};
 		D6AC83B81297D9491D198D6A /* FluidAudio */ = {
 			isa = XCSwiftPackageProductDependency;

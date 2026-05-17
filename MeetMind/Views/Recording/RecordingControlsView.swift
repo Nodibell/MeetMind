@@ -94,10 +94,19 @@ struct RecordingControlsView: View {
                                     .fill(.white)
                                     .frame(width: 22, height: 22)
                             } else if isProcessing {
-                                ProgressView()
-                                    .progressViewStyle(.circular)
-                                    .scaleEffect(0.8)
-                                    .tint(.white)
+                                // Custom SwiftUI-compatible progress view (fixes drawingGroup errors)
+                                Circle()
+                                    .stroke(lineWidth: 3)
+                                    .opacity(0.3)
+                                    .frame(width: 20, height: 20)
+                                    .overlay(
+                                        Circle()
+                                            .trim(from: 0, to: 0.3)
+                                            .stroke(style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                                            .rotationEffect(Angle(degrees: isProcessing ? 360 : 0))
+                                            .animation(isProcessing ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isProcessing)
+                                    )
+                                    .foregroundStyle(.white)
                             } else {
                                 Circle()
                                     .fill(.white)
@@ -105,6 +114,8 @@ struct RecordingControlsView: View {
                             }
                         }
                     }
+                    .frame(width: 110, height: 110)
+                    .drawingGroup() // Flattens layers to prevent "floating" animation offsets
                 }
                 .buttonStyle(.plain)
                 .disabled(isProcessing)

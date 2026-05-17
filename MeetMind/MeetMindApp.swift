@@ -17,12 +17,22 @@ struct MeetMindApp: App {
             Meeting.self,
             SpeakerProfile.self,
         ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        let url = URL.applicationSupportDirectory.appending(path: "MeetMind.store")
+        let modelConfiguration = ModelConfiguration(schema: schema, url: url)
+        
+        AppLogger.info("SwiftData Store URL: \(url.path)")
         
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            AppLogger.error("Failed to create ModelContainer, attempting to reset: \(error)")
+            // Fallback: delete corrupted store and try again
+            try? FileManager.default.removeItem(at: url)
+            do {
+                return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            } catch {
+                fatalError("Could not create ModelContainer even after reset: \(error)")
+            }
         }
     }()
     
@@ -44,7 +54,7 @@ struct MeetMindApp: App {
                 llmService: llmService
             )
             .environment(\.locale, .init(identifier: appSettings.appLanguage))
-            .frame(minWidth: 800, minHeight: 550)
+            .frame(minWidth: 900, minHeight: 600)
             .background(Theme.Colors.backgroundPrimary)
             .preferredColorScheme(.dark)
             .onAppear {
@@ -68,11 +78,9 @@ struct MeetMindApp: App {
                     }
                     
                     // Unload large LLM models if possible
-                    if let service = llmService {
-                        Task {
-                            // Logic to unload DeepMLX model via LLMService delegation
-                            // In a real implementation, LLMService would expose an unloadDeepModel() method
-                        }
+                    Task {
+                        AppLogger.systemHealth("Unloading LLM DeepMLX model due to critical memory pressure.")
+                        await llmService?.unloadDeepModel()
                     }
                 }
             }
@@ -94,7 +102,7 @@ struct MeetMindApp: App {
                     .environment(\.locale, .init(identifier: appSettings.appLanguage))
             } else {
                 ProgressView("Ініціалізація...")
-                    .frame(width: 550, height: 420)
+                    .frame(width: 580, height: 480)
             }
         }
     }

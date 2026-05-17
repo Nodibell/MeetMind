@@ -93,13 +93,12 @@ struct ActionItemsView: View {
     private func deleteTask(_ item: ActionItem) {
         // Find the meeting
         guard let meeting = meetings.first(where: { $0.id == item.meetingID }),
-              let path = meeting.summaryPath else { return }
+              let url = meeting.summaryURL else { return }
         
         do {
-            let url = URL(fileURLWithPath: path)
-            let summary = try String(contentsOf: url)
+            let summary = try String(contentsOf: url, encoding: .utf8)
             
-            let lines = summary.components(separatedBy: .newlines)
+            let lines = summary.components(separatedBy: CharacterSet.newlines)
             var newLines: [String] = []
             var found = false
             
@@ -130,9 +129,8 @@ struct ActionItemsView: View {
         var items: [ActionItem] = []
         
         for meeting in meetings {
-            if let summaryPath = meeting.summaryPath,
-               let data = try? Data(contentsOf: URL(fileURLWithPath: summaryPath)),
-               let summary = String(data: data, encoding: .utf8) {
+            if let url = meeting.summaryURL,
+               let summary = try? String(contentsOf: url, encoding: .utf8) {
                 
                 let lines = summary.components(separatedBy: CharacterSet.newlines)
                 for line in lines {
@@ -149,7 +147,7 @@ struct ActionItemsView: View {
                         if let match = regexAssignee?.firstMatch(in: text, options: [], range: NSRange(text.startIndex..., in: text)) {
                             if let range = Range(match.range(at: 1), in: text) ?? Range(match.range(at: 2), in: text) {
                                 assignee = String(text[range])
-                                text = text.replacingCharacters(in: Range(match.range, in: text)!, with: "").trimmingCharacters(in: .whitespaces)
+                                text = text.replacingCharacters(in: Range(match.range, in: text)!, with: "").trimmingCharacters(in: CharacterSet.whitespaces)
                             }
                         }
                         
@@ -175,11 +173,10 @@ struct ActionItemsView: View {
     private func toggleTask(_ item: ActionItem) {
         // Find the meeting
         guard let meeting = meetings.first(where: { $0.id == item.meetingID }),
-              let path = meeting.summaryPath else { return }
+              let url = meeting.summaryURL else { return }
         
         do {
-            let url = URL(fileURLWithPath: path)
-            var summary = try String(contentsOf: url)
+            var summary = try String(contentsOf: url, encoding: .utf8)
             
             // Very simple replacement logic: find the line that contains this task and toggle checkbox
             let oldCheck = item.isCompleted ? "- [x]" : "- [ ]"
@@ -187,7 +184,7 @@ struct ActionItemsView: View {
             
             // We need to be careful with matching to avoid false positives. 
             // We search for the specific line.
-            let lines = summary.components(separatedBy: .newlines)
+            let lines = summary.components(separatedBy: CharacterSet.newlines)
             var newLines: [String] = []
             var found = false
             

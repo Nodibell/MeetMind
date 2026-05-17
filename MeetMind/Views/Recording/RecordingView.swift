@@ -137,20 +137,26 @@ struct RecordingView: View {
     
     private var processingIndicator: some View {
         VStack(spacing: Theme.Spacing.md) {
-            if viewModel.state == .transcribing && viewModel.transcriptionProgressValue > 0 {
-                ProgressView(value: viewModel.transcriptionProgressValue)
-                    .progressViewStyle(.linear)
-                    .tint(Theme.Colors.accentPrimary)
-                    .frame(maxWidth: 200)
+            if viewModel.state == .transcribing {
+                VStack(spacing: Theme.Spacing.xs) {
+                    ProgressView(value: viewModel.transcriptionProgressValue)
+                        .progressViewStyle(.linear)
+                        .tint(Theme.Colors.accentPrimary)
+                        .frame(maxWidth: 200)
+                    
+                    Text("Транскрибування (high-quality): \(Int(viewModel.transcriptionProgressValue * 100))%")
+                        .font(Theme.Typography.caption)
+                        .foregroundStyle(Theme.Colors.textSecondary)
+                }
             } else {
                 ProgressView()
                     .scaleEffect(0.9)
                     .tint(Theme.Colors.accentPrimary)
+                
+                Text(processingLabel)
+                    .font(Theme.Typography.caption)
+                    .foregroundStyle(Theme.Colors.textSecondary)
             }
-            
-            Text(processingLabel)
-                .font(Theme.Typography.caption)
-                .foregroundStyle(Theme.Colors.textSecondary)
         }
         .frame(height: 80)
     }

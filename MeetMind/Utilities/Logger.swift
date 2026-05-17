@@ -24,19 +24,19 @@ enum AppLogger {
     // MARK: - Category Loggers
 
     /// General application lifecycle events.
-    nonisolated(unsafe) private static let general   = Logger(subsystem: subsystem, category: "General")
+    nonisolated private static let general   = Logger(subsystem: subsystem, category: "General")
 
     /// Audio capture pipeline (microphone, ScreenCaptureKit, format conversion).
-    nonisolated(unsafe) private static let audioPipe = Logger(subsystem: subsystem, category: "AudioPipeline")
+    nonisolated private static let audioPipe = Logger(subsystem: subsystem, category: "AudioPipeline")
 
     /// AI inference: WhisperKit transcription, FluidAudio diarization.
-    nonisolated(unsafe) private static let aiPipe    = Logger(subsystem: subsystem, category: "AIInference")
+    nonisolated private static let aiPipe    = Logger(subsystem: subsystem, category: "AIInference")
 
     /// Memory pressure and system health monitoring.
-    nonisolated(unsafe) private static let health    = Logger(subsystem: subsystem, category: "SystemHealth")
+    nonisolated private static let health    = Logger(subsystem: subsystem, category: "SystemHealth")
 
     /// SCStream keep-alive watchdog and reconnection logic.
-    nonisolated(unsafe) private static let watchdog  = Logger(subsystem: subsystem, category: "StreamWatchdog")
+    nonisolated private static let watchdog  = Logger(subsystem: subsystem, category: "StreamWatchdog")
 
     // MARK: - Public API
 

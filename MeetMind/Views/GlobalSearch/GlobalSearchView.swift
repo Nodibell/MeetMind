@@ -6,7 +6,7 @@ struct GlobalSearchView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Meeting.date, order: .reverse) private var allMeetings: [Meeting]
     
-    let llmService: LLMService
+    let llmService: any LLMProvider
     
     @State private var query: String = ""
     @State private var chatHistory: [ChatMessage] = []
@@ -62,9 +62,14 @@ struct GlobalSearchView: View {
     
     private var welcomeState: some View {
         VStack(spacing: Theme.Spacing.lg) {
-            Image(systemName: "sparkles.magnifyingglass")
+            Label("Глобальний запит", systemImage: "magnifyingglass")
                 .font(.system(size: 48))
                 .foregroundStyle(Theme.Colors.accentPrimary)
+                .overlay(
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 24))
+                        .offset(x: 20, y: -20)
+                )
             
             Text("Запитайте що завгодно")
                 .font(Theme.Typography.title3)
@@ -138,24 +143,34 @@ struct GlobalSearchView: View {
         Task {
             // Build context from all meetings
             var contexts: [String] = []
-            for meeting in allMeetings {
-                if let path = meeting.summaryPath,
-                   let summary = try? String(contentsOfFile: path),
-                   !summary.isEmpty {
-                    contexts.append("Нарада: \(meeting.title) (\(meeting.date.shortDisplayFormatted))\nЗміст: \(summary)")
-                }
-            }
-            let context = contexts.joined(separator: "\n\n---\n\n")
             
-            let systemPrompt = """
-            Ти — MeetMind AI. Твоє завдання — відповідати на запитання користувача, базуючись на зведеннях його нарад.
-            Надавай чіткі, структуровані відповіді. Якщо в контексті немає інформації, так і скажи.
-            Ось контекст нарад:
-            \(context)
-            """
+            guard let vaultURL = AppSettings.shared.obsidianVaultPath else {
+                return
+            }
+            
+            let accessGranted = vaultURL.startAccessingSecurityScopedResource()
+            defer { if accessGranted { vaultURL.stopAccessingSecurityScopedResource() } }
             
             do {
-                for try await chunk in llmService.generateResponseStream(prompt: userQuery, systemPrompt: systemPrompt) {
+                let fm = FileManager.default
+                for meeting in allMeetings {
+                    if let url = meeting.summaryURL,
+                       fm.fileExists(atPath: url.path),
+                       let summary = try? String(contentsOf: url, encoding: .utf8),
+                       !summary.isEmpty {
+                        contexts.append("Нарада: \(meeting.title) (\(meeting.date.shortDisplayFormatted))\nЗміст: \(summary)")
+                    }
+                }
+                let context = contexts.joined(separator: "\n\n---\n\n")
+                
+                let systemPrompt = """
+                Ти — MeetMind AI. Твоє завдання — відповідати на запитання користувача, базуючись на зведеннях його нарад.
+                Надавай чіткі, структуровані відповіді. Якщо в контексті немає інформації, так і скажи.
+                Ось контекст нарад:
+                \(context)
+                """
+                
+                for try await chunk in await llmService.generateResponseStream(prompt: userQuery, systemPrompt: systemPrompt) {
                     await MainActor.run {
                         streamingAnswer += chunk
                     }

@@ -13,9 +13,9 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     
     // Services (injected from app)
-    let audioManager: AudioManager
-    let transcriptionService: TranscriptionService
-    let llmService: LLMService
+    let audioManager: any AudioProvider
+    let transcriptionService: any TranscriptionProvider
+    let llmService: any LLMProvider
     
     // State
     @State private var selectedMeetingID: UUID?
@@ -42,7 +42,7 @@ struct ContentView: View {
             checkFirstRun()
         }
         .sheet(isPresented: $isShowingOnboarding) {
-            OnboardingView {
+            OnboardingView(transcriptionService: transcriptionService) {
                 isShowingOnboarding = false
                 UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
             }
@@ -106,11 +106,23 @@ struct ContentView: View {
                     .background(Theme.Colors.backgroundPrimary)
             }
         } else if let meetingID = selectedMeetingID {
-            // Show meeting detail
-            MeetingDetailForID(
-                meetingID: meetingID,
-                llmService: llmService
-            )
+            // Check if this meeting is currently being recorded
+            if isShowingRecording || (recordingVM?.state == .recording && recordingVM?.currentMeeting?.id == meetingID) {
+                if let vm = recordingVM {
+                    RecordingView(viewModel: vm)
+                } else {
+                    MeetingDetailForID(
+                        meetingID: meetingID,
+                        llmService: llmService
+                    )
+                }
+            } else {
+                // Show meeting detail
+                MeetingDetailForID(
+                    meetingID: meetingID,
+                    llmService: llmService
+                )
+            }
         } else {
             // Empty state
             welcomeView
@@ -236,30 +248,63 @@ struct ContentView: View {
 
 struct MeetingDetailForID: View {
     let meetingID: UUID
-    let llmService: LLMService
+    let llmService: any LLMProvider
     
     @Environment(\.modelContext) private var modelContext
     @Query private var meetings: [Meeting]
     
     @State private var detailVM: MeetingDetailViewModel?
     
+    init(meetingID: UUID, llmService: any LLMProvider) {
+        self.meetingID = meetingID
+        self.llmService = llmService
+        
+        let predicate = #Predicate<Meeting> { $0.id == meetingID }
+        _meetings = Query(filter: predicate)
+    }
+    
     var body: some View {
-        if let meeting = meetings.first(where: { $0.id == meetingID }) {
-            if let vm = detailVM, vm.meeting.id == meetingID {
+        Group {
+            if let meeting = meetings.first ?? findMeetingDirectly() {
+                MeetingDetailViewWrapper(meeting: meeting, llmService: llmService)
+                    .id(meeting.id) // Force redraw on ID change
+            } else {
+                VStack(spacing: Theme.Spacing.md) {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text("Завантаження наради...")
+                        .font(Theme.Typography.body)
+                        .foregroundStyle(Theme.Colors.textTertiary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Theme.Colors.backgroundPrimary)
+            }
+        }
+    }
+    
+    private func findMeetingDirectly() -> Meeting? {
+        let descriptor = FetchDescriptor<Meeting>(predicate: #Predicate { $0.id == meetingID })
+        return try? modelContext.fetch(descriptor).first
+    }
+}
+
+struct MeetingDetailViewWrapper: View {
+    let meeting: Meeting
+    let llmService: any LLMProvider
+    @Environment(\.modelContext) private var modelContext
+    @State private var viewModel: MeetingDetailViewModel?
+    
+    var body: some View {
+        Group {
+            if let vm = viewModel {
                 MeetingDetailView(viewModel: vm)
             } else {
                 Color.clear.onAppear {
                     let vm = MeetingDetailViewModel(meeting: meeting, llmService: llmService)
                     vm.setModelContext(modelContext)
-                    detailVM = vm
+                    viewModel = vm
                 }
             }
-        } else {
-            Text("Нараду не знайдено")
-                .font(Theme.Typography.body)
-                .foregroundStyle(Theme.Colors.textTertiary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Theme.Colors.backgroundPrimary)
         }
     }
 }

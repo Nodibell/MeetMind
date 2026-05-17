@@ -62,7 +62,7 @@ struct MeetingListView: View {
             // Meeting list
             List(selection: $selectedMeetingID) {
                 Section("Smart") {
-                    Label("Глобальний запит", systemImage: "sparkles.magnifyingglass")
+                    Label("Глобальний запит", systemImage: "magnifyingglass")
                         .tag(UUID.globalSearch)
                     
                     Label("Завдання (Action Items)", systemImage: "checklist")

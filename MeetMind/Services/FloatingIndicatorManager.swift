@@ -13,13 +13,21 @@ final class FloatingIndicatorManager {
     
     class IndicatorState: ObservableObject {
         @Published var isActiveSpeech = false
+        @Published var isPaused = false
         @Published var speakerName: String?
+        @Published var elapsedTime: TimeInterval = 0
+        @Published var lastTranscript: String?
+        
+        var onPause: (() -> Void)?
+        var onResume: (() -> Void)?
+        var onStop: (() -> Void)?
+        var onHide: (() -> Void)?
     }
     
     func show(isActiveSpeech: Bool, speakerName: String?) {
         if window == nil {
             let panel = NSPanel(
-                contentRect: NSRect(x: 0, y: 0, width: 220, height: 70),
+                contentRect: NSRect(x: 0, y: 0, width: 280, height: 80),
                 styleMask: [.borderless, .nonactivatingPanel],
                 backing: .buffered,
                 defer: false
@@ -40,8 +48,8 @@ final class FloatingIndicatorManager {
             panel.contentView = contentView
             
             if let screen = NSScreen.main {
-                let x = screen.visibleFrame.maxX - 240
-                let y = screen.visibleFrame.maxY - 90
+                let x = screen.visibleFrame.maxX - 300
+                let y = screen.visibleFrame.maxY - 100
                 panel.setFrameOrigin(NSPoint(x: x, y: y))
             }
             
@@ -52,9 +60,27 @@ final class FloatingIndicatorManager {
         window?.orderFrontRegardless()
     }
     
-    func update(isActiveSpeech: Bool, speakerName: String?) {
+    func update(
+        isActiveSpeech: Bool,
+        isPaused: Bool = false,
+        speakerName: String?,
+        elapsedTime: TimeInterval = 0,
+        lastTranscript: String? = nil,
+        onPause: (() -> Void)? = nil,
+        onResume: (() -> Void)? = nil,
+        onStop: (() -> Void)? = nil,
+        onHide: (() -> Void)? = nil
+    ) {
         indicatorState.isActiveSpeech = isActiveSpeech
+        indicatorState.isPaused = isPaused
         indicatorState.speakerName = speakerName
+        indicatorState.elapsedTime = elapsedTime
+        indicatorState.lastTranscript = lastTranscript
+        
+        if let onPause { indicatorState.onPause = onPause }
+        if let onResume { indicatorState.onResume = onResume }
+        if let onStop { indicatorState.onStop = onStop }
+        if let onHide { indicatorState.onHide = onHide }
     }
     
     func hide() {

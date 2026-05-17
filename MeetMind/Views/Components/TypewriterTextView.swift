@@ -72,6 +72,52 @@ struct TypewriterTextView: View {
 }
 
 #Preview {
-    TypewriterTextView(fullText: "Привіт, це тест посимвольного виводу тексту.", isStreaming: true)
-        .padding()
+    struct AnimatedPreviewWrapper: View {
+        @State private var text = ""
+        let phrases = [
+            "Hi! This is a demo of the typewriter effect.",
+            "MeetMind analyzes your meetings in real time.",
+            "Create structured resumes and tasks in seconds.",
+            "Local MLX models run right on your Mac!"
+        ]
+        @State private var phraseIndex = 0
+        
+        var body: some View {
+            VStack(alignment: .leading) {
+                TypewriterTextView(fullText: text, isStreaming: true, delayMilliseconds: 25)
+                    .font(.system(.title3, design: .rounded))
+                    .frame(height: 80, alignment: .topLeading)
+                    .padding()
+            }
+            .frame(width: 450, height: 120)
+            .task {
+                while true {
+                    let targetText = phrases[phraseIndex]
+                    // Type out phrase
+                    for i in 1...targetText.count {
+                        if Task.isCancelled { return }
+                        text = String(targetText.prefix(i))
+                        try? await Task.sleep(nanoseconds: 40_000_000) // 40ms per character
+                    }
+                    
+                    // Stay fully displayed
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    
+                    // Backspace deletion animation
+                    for i in (0...targetText.count).reversed() {
+                        if Task.isCancelled { return }
+                        text = String(targetText.prefix(i))
+                        try? await Task.sleep(nanoseconds: 15_000_000) // 15ms per character backspace
+                    }
+                    
+                    // Pause before next phrase
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    
+                    phraseIndex = (phraseIndex + 1) % phrases.count
+                }
+            }
+        }
+    }
+    
+    return AnimatedPreviewWrapper()
 }

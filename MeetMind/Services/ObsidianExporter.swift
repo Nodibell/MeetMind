@@ -18,19 +18,19 @@ struct ObsidianExporter: Sendable {
         to vaultURL: URL
     ) throws -> URL {
         // Request access to security-scoped resource
-        AppLogger.info("Запит на доступ до папки Obsidian: \(vaultURL.lastPathComponent)")
+        AppLogger.info("Requesting access to Obsidian folder: \(vaultURL.lastPathComponent)")
         let accessGranted = vaultURL.startAccessingSecurityScopedResource()
         
         if accessGranted {
-            AppLogger.info("Доступ до папки Obsidian отримано")
+            AppLogger.info("Access to Obsidian folder granted")
         } else {
-            AppLogger.warning("Доступ до папки Obsidian НЕ отримано (можливо, дозвіл застарів)")
+            AppLogger.warning("Access to Obsidian folder NOT granted (permission may be stale)")
         }
         
         defer {
             if accessGranted {
                 vaultURL.stopAccessingSecurityScopedResource()
-                AppLogger.info("Доступ до папки Obsidian звільнено")
+                AppLogger.info("Access to Obsidian folder released")
             }
         }
         
@@ -50,9 +50,9 @@ struct ObsidianExporter: Sendable {
         let content = generateMarkdown(for: meeting)
         
         // Write file
-        AppLogger.info("Запис файлу в Obsidian: \(fileURL.lastPathComponent)")
+        AppLogger.info("Writing file to Obsidian: \(fileURL.lastPathComponent)")
         try content.write(to: fileURL, atomically: true, encoding: .utf8)
-        AppLogger.info("Експорт в Obsidian успішно завершено")
+        AppLogger.info("Export to Obsidian completed successfully")
         
         return fileURL
     }

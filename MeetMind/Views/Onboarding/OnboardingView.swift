@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct OnboardingView: View {
+    let transcriptionService: any TranscriptionProvider
+    
     @State private var currentStep = 0
     @State private var micPermission = false
     @State private var screenPermission = false
@@ -27,7 +29,7 @@ struct OnboardingView: View {
             footer
         }
         .padding(40)
-        .frame(width: 600, height: 450)
+        .frame(width: 650, height: 490)
         .background(Theme.Colors.backgroundPrimary)
     }
     
@@ -66,13 +68,14 @@ struct OnboardingView: View {
     
     private var modelSetupStep: some View {
         VStack(spacing: 25) {
-            Text("Завантаження AI моделей")
+            Text("Завантаження моделі AI")
                 .font(.headline)
             
-            Text("Ми завантажуємо Whisper (транскрипція) та Llama 3 (аналіз). Це займе кілька хвилин, оскільки все працює локально.")
+            Text("Ми завантажуємо модель Whisper для швидкої та приватної локальної транскрипції голосу на вашому Mac. Це займе кілька хвилин.")
                 .multilineTextAlignment(.center)
                 .font(.subheadline)
                 .padding(.horizontal)
+                .fixedSize(horizontal: false, vertical: true)
             
             VStack(spacing: 10) {
                 ProgressView(value: downloadProgress)
@@ -89,6 +92,10 @@ struct OnboardingView: View {
                     startModelDownload()
                 }
                 .buttonStyle(.borderedProminent)
+            } else if isDownloading {
+                Text("Завантаження моделі з Hugging Face...")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
             } else if downloadProgress >= 1.0 {
                 Text("Завантаження завершено")
                     .foregroundColor(.green)
@@ -152,12 +159,34 @@ struct OnboardingView: View {
     
     private func startModelDownload() {
         isDownloading = true
-        Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { timer in
-            if downloadProgress < 1.0 {
-                downloadProgress += 0.01
-            } else {
-                timer.invalidate()
-                isDownloading = false
+        downloadProgress = 0.0
+        
+        Task {
+            await transcriptionService.setOnStateChanged { state in
+                Task { @MainActor in
+                    switch state {
+                    case .downloading(let progress):
+                        self.downloadProgress = progress
+                    case .loading:
+                        self.downloadProgress = 0.95
+                    case .ready:
+                        self.downloadProgress = 1.0
+                        self.isDownloading = false
+                    case .error(let errorMsg):
+                        self.isDownloading = false
+                        AppLogger.error("Error downloading model in onboarding: \(errorMsg)")
+                    default:
+                        break
+                    }
+                }
+            }
+            
+            do {
+                try await transcriptionService.initialize(modelName: nil)
+            } catch {
+                await MainActor.run {
+                    self.isDownloading = false
+                }
             }
         }
     }
@@ -189,5 +218,16 @@ struct PermissionRow: View {
 }
 
 #Preview {
-    OnboardingView(onComplete: {})
+    struct MockTranscriptionProvider: TranscriptionProvider {
+        var isReady: Bool { false }
+        func initialize(modelName: String?) async throws {}
+        func transcribeLive(samples: [Float], offset: TimeInterval) async throws -> [MeetingTranscriptSegment] { [] }
+        func transcribeFile(at url: URL) async throws -> MeetingTranscriptDocument {
+            MeetingTranscriptDocument(meetingId: UUID(), createdAt: Date(), language: "en", segments: [])
+        }
+        func unloadModels() async {}
+        func setOnStateChanged(_ callback: (@Sendable (TranscriptionService.ServiceState) -> Void)?) async {}
+    }
+    
+    return OnboardingView(transcriptionService: MockTranscriptionProvider(), onComplete: {})
 }

@@ -13,11 +13,14 @@ import os
 
 /// Manages audio capture from microphone or virtual audio devices
 @Observable
-final class AudioManager: NSObject, @unchecked Sendable {
+final class AudioManager: NSObject, AudioProvider, @unchecked Sendable {
 
     // MARK: - Public State
     var isRecording = false
-    var isPaused = false
+    nonisolated var isPaused: Bool {
+        get { isPausedAtomic.withLock { $0 } }
+        set { isPausedAtomic.withLock { $0 = newValue } }
+    }
     var elapsedTime: TimeInterval = 0
     var audioLevels: [Float] = Array(repeating: 0, count: Constants.waveformSampleCount)
     var availableDevices: [AudioDevice] = []
@@ -52,6 +55,7 @@ final class AudioManager: NSObject, @unchecked Sendable {
     // MARK: - Keep-Alive Watchdog
     private var keepAliveTimer: DispatchSourceTimer?
     private let lastBufferTimestamp = OSAllocatedUnfairLock(initialState: CFAbsoluteTimeGetCurrent())
+    private let isPausedAtomic = OSAllocatedUnfairLock(initialState: false)
     private var streamConfiguration: SCStreamConfiguration?
     private var streamFilter: SCContentFilter?
     private var reconnectionRetryCount = 0
@@ -141,7 +145,7 @@ final class AudioManager: NSObject, @unchecked Sendable {
         let filename = "recording_\(Date().filenameDateFormatted)_\(UUID().uuidString.prefix(8)).wav"
         let fileURL = Constants.recordingsDirectory.appendingPathComponent(filename)
         currentRecordingURL = fileURL
-        AppLogger.audio("Початок запису у файл: \(fileURL.lastPathComponent)")
+        AppLogger.audio("Starting recording to file: \(fileURL.lastPathComponent)")
 
         // Setup audio engine
         let engine = AVAudioEngine()
@@ -210,7 +214,7 @@ final class AudioManager: NSObject, @unchecked Sendable {
                             do {
                                 try self.audioFile?.write(from: convertedBuffer)
                             } catch {
-                                AppLogger.error("Помилка запису у файл: \(error)")
+                                AppLogger.error("Error writing to file: \(error)")
                             }
                         }
                     }
@@ -222,7 +226,7 @@ final class AudioManager: NSObject, @unchecked Sendable {
         if audioSource == .microphone || audioSource == .mixed {
             try engine.start()
             audioEngine = engine
-            AppLogger.audio("Audio Engine (Мікрофон) запущено")
+            AppLogger.audio("Audio Engine (Microphone) started")
         }
 
         isRecording = true
@@ -251,7 +255,7 @@ final class AudioManager: NSObject, @unchecked Sendable {
         guard isRecording && !isPaused else { return }
         isPaused = true
         pausedAt = Date()
-        AppLogger.audio("Запис призупинено")
+        AppLogger.audio("Recording paused")
     }
 
     func resumeRecording() {
@@ -261,7 +265,7 @@ final class AudioManager: NSObject, @unchecked Sendable {
         }
         isPaused = false
         self.pausedAt = nil
-        AppLogger.audio("Запис відновлено")
+        AppLogger.audio("Recording resumed")
     }
 
     private var pausedAt: Date?
@@ -473,7 +477,7 @@ final class AudioManager: NSObject, @unchecked Sendable {
             SystemAudioSourceInfo(
                 id: "display:\(display.displayID)",
                 kind: .display,
-                title: "Екран \(index + 1)",
+                title: "Display \(index + 1)",
                 subtitle: "\(Int(display.width))×\(Int(display.height))",
                 displayID: display.displayID,
                 windowID: nil
@@ -590,7 +594,7 @@ final class AudioManager: NSObject, @unchecked Sendable {
             }
         }
 
-        AppLogger.audio("Запис системного звуку запущено")
+        AppLogger.audio("System audio capture started")
         return fileURL
     }
 
@@ -668,30 +672,33 @@ extension AudioManager: SCStreamOutput, SCStreamDelegate {
         let totalSamples = Int(audioBuffer.mDataByteSize) / MemoryLayout<Float32>.size
         let floatPointer = rawData.assumingMemoryBound(to: Float32.self)
 
-        // Mono downmix if needed: compute per-frame sample count
-        let framesPerChannel = channelCount > 0 ? totalSamples / Int(channelCount) : totalSamples
+        // Safe copy of audio data before jumping to the pipeline queue
+        let rawSamples = Array(UnsafeBufferPointer(start: floatPointer, count: totalSamples))
+        let currentChannelCount = channelCount
+        let currentSampleRate = actualSampleRate
 
         audioPipelineQueue.async { [weak self] in
             guard let self else { return }
 
             // Step 1: Mono downmix (if multi-channel)
             var monoSamples: [Float]
-            if channelCount > 1 {
-                monoSamples = [Float](repeating: 0, count: framesPerChannel)
-                for ch in 0..<Int(channelCount) {
-                    for i in 0..<framesPerChannel {
-                        monoSamples[i] += floatPointer[i * Int(channelCount) + ch]
+            if currentChannelCount > 1 {
+                let frames = rawSamples.count / Int(currentChannelCount)
+                monoSamples = [Float](repeating: 0, count: frames)
+                for ch in 0..<Int(currentChannelCount) {
+                    for i in 0..<frames {
+                        monoSamples[i] += rawSamples[i * Int(currentChannelCount) + ch]
                     }
                 }
-                var divisor = Float(channelCount)
-                vDSP_vsdiv(monoSamples, 1, &divisor, &monoSamples, 1, vDSP_Length(framesPerChannel))
+                var divisor = Float(currentChannelCount)
+                vDSP_vsdiv(monoSamples, 1, &divisor, &monoSamples, 1, vDSP_Length(frames))
             } else {
-                monoSamples = Array(UnsafeBufferPointer(start: floatPointer, count: totalSamples))
+                monoSamples = rawSamples
             }
 
             // Step 2: Resample to 16kHz if needed using vDSP
             let samples: [Float]
-            if abs(actualSampleRate - Constants.whisperSampleRate) < 1.0 {
+            if abs(currentSampleRate - Constants.whisperSampleRate) < 1.0 {
                 samples = monoSamples
             } else {
                 let ratio = Constants.whisperSampleRate / actualSampleRate

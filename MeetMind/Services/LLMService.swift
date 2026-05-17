@@ -8,27 +8,21 @@
 import Foundation
 
 /// Local LLM integration via Ollama REST API
-actor LLMService {
+actor LLMService: LLMProvider {
     
     // MARK: - State
-    enum ServiceState: Sendable, Equatable {
-        case idle
-        case checking
-        case available(models: [String])
-        case generating
-        case unavailable(reason: String)
-    }
-    
-    private(set) var state: ServiceState = .idle
+    private(set) var state: LLMServiceState = .idle
     private var lastHealthCheckDate: Date?
+    private var lastHealthCheckProvider: AppSettings.LLMProvider?
+    private var lastHealthCheckEndpoint: String?
     private let healthCacheDuration: TimeInterval = 60 // seconds
     private let deepLLM = DeepLLMService()
     
     // MARK: - Callbacks
-    var onStateChanged: (@Sendable (ServiceState) -> Void)?
+    var onStateChanged: (@Sendable (LLMServiceState) -> Void)?
     var onTokenReceived: (@Sendable (String) -> Void)?
     
-    func setOnStateChanged(_ callback: (@Sendable (ServiceState) -> Void)?) {
+    func setOnStateChanged(_ callback: (@Sendable (LLMServiceState) -> Void)?) {
         self.onStateChanged = callback
     }
     
@@ -36,8 +30,83 @@ actor LLMService {
         self.onTokenReceived = callback
     }
     
+    private var autoUnloadTask: Task<Void, Never>?
+    
+    private func cancelUnloadTask() {
+        autoUnloadTask?.cancel()
+        autoUnloadTask = nil
+    }
+    
+    private func scheduleAutoUnload() {
+        autoUnloadTask?.cancel()
+        autoUnloadTask = Task {
+            let timeout = await MainActor.run { AppSettings.shared.llmModelUnloadTimeout }
+            guard timeout >= 0 else { return } // -1 means never unload
+            
+            if timeout == 0 {
+                await self.unloadModel()
+                return
+            }
+            
+            do {
+                try await Task.sleep(for: .seconds(timeout))
+                guard !Task.isCancelled else { return }
+                await self.unloadModel()
+            } catch {
+                // Task was cancelled
+            }
+        }
+    }
+    
+    func unloadModel() async {
+        let provider = await MainActor.run { AppSettings.shared.llmProvider }
+        let model = await MainActor.run { AppSettings.shared.llmModel }
+        let endpoint = await MainActor.run { AppSettings.shared.llmEndpoint }
+        
+        switch provider {
+        case .deepMLX:
+            await deepLLM.unload()
+            AppLogger.info("DeepMLX model unloaded automatically due to inactivity.")
+            
+        case .ollama:
+            guard let url = Self.apiURL(endpoint: endpoint, provider: .ollama, path: "/api/generate") else { return }
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.timeoutInterval = 10
+            
+            let payload: [String: Any] = [
+                "model": model,
+                "keep_alive": 0
+            ]
+            request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
+            
+            _ = try? await URLSession.shared.data(for: request)
+            AppLogger.info("Ollama model '\(model)' unloaded automatically due to inactivity.")
+            
+        case .lmStudio:
+            guard let url = Self.apiURL(endpoint: endpoint, provider: .lmStudio, path: "/api/v1/models/unload") else { return }
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.timeoutInterval = 10
+            
+            let payload: [String: Any] = [
+                "instance_id": model
+            ]
+            request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
+            
+            _ = try? await URLSession.shared.data(for: request)
+            AppLogger.info("LM Studio model '\(model)' unloaded automatically due to inactivity.")
+        }
+    }
+    
+    func unloadDeepModel() async {
+        await unloadModel()
+    }
+    
     // MARK: - API Models
-    private struct ChatRequest: Encodable {
+    private struct OllamaChatRequest: Encodable {
         let model: String
         let messages: [ChatMessage]
         let stream: Bool
@@ -47,6 +116,21 @@ actor LLMService {
             let temperature: Double?
             let num_predict: Int?
             let top_p: Double?
+        }
+    }
+    
+    private struct OpenAIChatRequest: Encodable {
+        let model: String
+        let messages: [ChatMessage]
+        let stream: Bool
+        let temperature: Double?
+        let maxTokens: Int?
+        let topP: Double?
+        
+        enum CodingKeys: String, CodingKey {
+            case model, messages, stream, temperature
+            case maxTokens = "max_tokens"
+            case topP = "top_p"
         }
     }
     
@@ -102,20 +186,128 @@ actor LLMService {
         }
     }
     
+    // MARK: - Request Helpers
+    
+    nonisolated static func apiURL(endpoint rawEndpoint: String, provider: AppSettings.LLMProvider, path: String) -> URL? {
+        var endpoint = rawEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        while endpoint.hasSuffix("/") {
+            endpoint.removeLast()
+        }
+        
+        guard !endpoint.isEmpty else { return nil }
+        
+        var normalizedPath = path.hasPrefix("/") ? path : "/\(path)"
+        if provider == .lmStudio,
+           endpoint.lowercased().hasSuffix("/v1"),
+           normalizedPath.lowercased().hasPrefix("/v1/") {
+            normalizedPath = String(normalizedPath.dropFirst(3))
+        }
+        
+        return URL(string: endpoint + normalizedPath)
+    }
+    
+    nonisolated static func isModelAvailable(_ model: String, in availableModels: [String], provider: AppSettings.LLMProvider) -> Bool {
+        if provider == .deepMLX {
+            return true
+        }
+        let selected = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !selected.isEmpty else { return false }
+        
+        if availableModels.contains(selected) {
+            return true
+        }
+        
+        guard provider == .ollama, !selected.contains(":") else {
+            return false
+        }
+        
+        return availableModels.contains { available in
+            available == "\(selected):latest" || available.hasPrefix("\(selected):")
+        }
+    }
+    
+    nonisolated static func modelSelectionWarning(model: String, provider: AppSettings.LLMProvider) -> String? {
+        let normalized = model.lowercased()
+        
+        if normalized.contains("embed")
+            || normalized.contains("embedding")
+            || normalized.contains("nomic-bert")
+            || normalized.contains("bge-")
+            || normalized.contains("e5-") {
+            return "Це embedding-модель. Для резюме та Q&A оберіть instruct/chat модель."
+        }
+        
+        if provider == .lmStudio,
+           normalized.contains("glm4v") || normalized.contains("vision") || normalized.contains("vl") {
+            return "Це multimodal/vision модель. Через LM Studio може працювати для тексту, але DeepMLX напряму її не завантажить."
+        }
+        
+        return nil
+    }
+    
+    nonisolated static func encodedChatRequestData(
+        provider: AppSettings.LLMProvider,
+        model: String,
+        messages: [ChatMessage],
+        stream: Bool,
+        temperature: Double,
+        maxTokens: Int,
+        topP: Double
+    ) throws -> Data {
+        let encoder = JSONEncoder()
+        
+        switch provider {
+        case .ollama:
+            let request = OllamaChatRequest(
+                model: model,
+                messages: messages,
+                stream: stream,
+                options: .init(temperature: temperature, num_predict: maxTokens, top_p: topP)
+            )
+            return try encoder.encode(request)
+        case .lmStudio:
+            let request = OpenAIChatRequest(
+                model: model,
+                messages: messages,
+                stream: stream,
+                temperature: temperature,
+                maxTokens: maxTokens,
+                topP: topP
+            )
+            return try encoder.encode(request)
+        case .deepMLX:
+            return Data()
+        }
+    }
+    
     // MARK: - Health Check
     
     /// Check if LLM server is running and list available models
     func checkHealth() async -> Bool {
-        let provider = AppSettings.shared.llmProvider
+        let provider = await MainActor.run { AppSettings.shared.llmProvider }
+        let endpoint = await MainActor.run { AppSettings.shared.llmEndpoint }
         
-        // DeepMLX is local and always "running" if initialized
         if provider == .deepMLX {
-            updateState(.available(models: ["Llama-3-70B-DeepSummary"]))
+            let deepModelPath = await MainActor.run { AppSettings.shared.deepMLXModelPath }
+            guard let modelPath = deepModelPath else {
+                updateState(.unavailable(reason: "Шлях до моделі MLX не обрано"))
+                return false
+            }
+            
+            if let issue = DeepLLMService.modelDirectoryValidationIssue(at: modelPath) {
+                updateState(.unavailable(reason: "MLX-папка недійсна: \(issue)"))
+                return false
+            }
+            
+            let modelName = modelPath.lastPathComponent
+            updateState(.available(models: [modelName]))
             return true
         }
-
+        
         // Return cached result if still fresh
         if let lastCheck = lastHealthCheckDate,
+           lastHealthCheckProvider == provider,
+           lastHealthCheckEndpoint == endpoint,
            Date().timeIntervalSince(lastCheck) < healthCacheDuration,
            case .available = state {
             return true
@@ -123,12 +315,56 @@ actor LLMService {
 
         updateState(.checking)
         
-        let endpoint = AppSettings.shared.llmEndpoint
+        do {
+            let modelNames = try await fetchAvailableModels(provider: provider, endpoint: endpoint)
+            lastHealthCheckDate = Date()
+            lastHealthCheckProvider = provider
+            lastHealthCheckEndpoint = endpoint
+            updateState(.available(models: modelNames))
+            return true
+        } catch {
+            if provider == .lmStudio {
+                let startResult = await LMStudioServerManager.ensureServerRunning(endpoint: endpoint)
+                AppLogger.info(startResult.message)
+                
+                if startResult.isUsable {
+                    try? await Task.sleep(nanoseconds: 600_000_000)
+                    
+                    do {
+                        let modelNames = try await fetchAvailableModels(provider: provider, endpoint: endpoint)
+                        lastHealthCheckDate = Date()
+                        lastHealthCheckProvider = provider
+                        lastHealthCheckEndpoint = endpoint
+                        updateState(.available(models: modelNames))
+                        return true
+                    } catch {
+                        updateState(.unavailable(reason: "LM Studio server запущено, але API ще не відповідає: \(error.localizedDescription)"))
+                        return false
+                    }
+                }
+                
+                updateState(.unavailable(reason: startResult.message))
+                return false
+            }
+            
+            updateState(.unavailable(reason: error.localizedDescription))
+            return false
+        }
+    }
+    
+    private func fetchAvailableModels(provider: AppSettings.LLMProvider, endpoint: String) async throws -> [String] {
+        if provider == .deepMLX {
+            let deepModelPath = await MainActor.run { AppSettings.shared.deepMLXModelPath }
+            if let path = deepModelPath {
+                return [path.lastPathComponent]
+            }
+            return []
+        }
+        
         let path = provider == .lmStudio ? Constants.openaiHealthPath : Constants.ollamaHealthPath
         
-        guard let url = URL(string: "\(endpoint)\(path)") else {
-            updateState(.unavailable(reason: "Невірна URL-адреса"))
-            return false
+        guard let url = Self.apiURL(endpoint: endpoint, provider: provider, path: path) else {
+            throw LLMError.invalidEndpoint
         }
         
         do {
@@ -136,30 +372,54 @@ actor LLMService {
             
             guard let httpResponse = response as? HTTPURLResponse,
                   httpResponse.statusCode == 200 else {
-                updateState(.unavailable(reason: "Сервер не відповідає (HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0))"))
-                return false
+                throw LLMError.requestFailed("HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)")
             }
-            
-            var modelNames: [String] = []
             
             if provider == .lmStudio {
                 let tagsResponse = try JSONDecoder().decode(OpenAITagsResponse.self, from: data)
-                modelNames = tagsResponse.data.map(\.id)
+                return tagsResponse.data.map(\.id)
             } else {
                 let tagsResponse = try JSONDecoder().decode(TagsResponse.self, from: data)
-                modelNames = tagsResponse.models.map(\.name)
+                return tagsResponse.models.map(\.name)
             }
-
-            lastHealthCheckDate = Date()
-            updateState(.available(models: modelNames))
-            return true
         } catch let error as URLError where error.code == .cannotConnectToHost {
             let msg = provider == .lmStudio ? "LM Studio не запущено." : "Ollama не запущено."
-            updateState(.unavailable(reason: msg))
-            return false
+            throw LLMError.requestFailed(msg)
         } catch {
-            updateState(.unavailable(reason: "Помилка з'єднання: \(error.localizedDescription)"))
-            return false
+            throw LLMError.requestFailed("Помилка з'єднання: \(error.localizedDescription)")
+        }
+    }
+    
+    private func executeWithDeepMLXIfEnabled(messages: [ChatMessage], maxTokens: Int = 2048) async throws -> String? {
+        let provider = await MainActor.run { AppSettings.shared.llmProvider }
+        let deepModelPath = await MainActor.run { AppSettings.shared.deepMLXModelPath }
+        
+        guard provider == .deepMLX else { return nil }
+        
+        guard let modelPath = deepModelPath, DeepLLMService.isLikelyMLXModelDirectory(modelPath) else {
+            if let modelPath = deepModelPath, let issue = DeepLLMService.modelDirectoryValidationIssue(at: modelPath) {
+                AppLogger.warning("DeepMLX selected but MLX folder is invalid: \(issue).")
+            } else {
+                AppLogger.warning("DeepMLX selected but MLX folder is not specified.")
+            }
+            return nil
+        }
+        
+        cancelUnloadTask()
+        
+        defer {
+            scheduleAutoUnload()
+        }
+        
+        do {
+            if await deepLLM.state != .ready {
+                try await deepLLM.loadModel(modelPath: modelPath)
+            }
+            let response = try await deepLLM.generate(messages: messages, maxTokens: maxTokens)
+            return response
+        } catch {
+            AppLogger.error("DeepMLX: request execution error: \(error.localizedDescription)")
+            throw error
         }
     }
     
@@ -167,16 +427,28 @@ actor LLMService {
     
     /// Generate meeting summary from transcript text
     func generateSummary(transcript: String, targetLanguage: String? = nil) async throws -> String {
-        AppLogger.info("Запит на генерацію резюме (довжина: \(transcript.count) симв., мова: \(targetLanguage ?? "auto"))")
+        AppLogger.info("Summary generation request (length: \(transcript.count) chars, language: \(targetLanguage ?? "auto"))")
         
-        let provider = AppSettings.shared.llmProvider
+        let provider = await MainActor.run { AppSettings.shared.llmProvider }
+        let customPrompt = await MainActor.run { AppSettings.shared.customSummaryPrompt }
         
         if provider == .deepMLX {
-            return try await deepLLM.generateSummary(transcript: transcript)
+            let systemPrompt = DeepLLMService.buildDeepSummarySystemPrompt(targetLanguage: targetLanguage, customPrompt: customPrompt)
+            let userPrompt = DeepLLMService.buildDeepSummaryUserPrompt(transcript: transcript)
+            let messages = [
+                ChatMessage(role: "system", content: systemPrompt),
+                ChatMessage(role: "user", content: userPrompt)
+            ]
+            if let result = try await executeWithDeepMLXIfEnabled(messages: messages, maxTokens: 2048) {
+                AppLogger.info("DeepMLX: Summary generation successful!")
+                return result
+            } else {
+                throw LLMError.requestFailed("DeepMLX модель не обрана або недійсна. Будь ласка, оберіть MLX-папку в налаштуваннях.")
+            }
         }
         
-        let model = AppSettings.shared.llmModel
-        let endpoint = AppSettings.shared.llmEndpoint
+        let model = await MainActor.run { AppSettings.shared.llmModel }
+        let endpoint = await MainActor.run { AppSettings.shared.llmEndpoint }
         
         // Check if Server is available
         let isAvailable = await checkHealth()
@@ -186,7 +458,7 @@ actor LLMService {
         
         // Check if model is available
         if case .available(let models) = state {
-            if !models.contains(where: { $0.hasPrefix(model.components(separatedBy: ":").first ?? model) }) {
+            if !Self.isModelAvailable(model, in: models, provider: provider) {
                 throw LLMError.modelNotFound(model)
             }
         }
@@ -202,7 +474,8 @@ actor LLMService {
     // MARK: - Single Summary
     
     private func generateSingleSummary(transcript: String, model: String, endpoint: String, targetLanguage: String?) async throws -> String {
-        let systemPrompt = Self.buildSystemPrompt(targetLanguage: targetLanguage)
+        let customPrompt = await MainActor.run { AppSettings.shared.customSummaryPrompt }
+        let systemPrompt = Self.buildSystemPrompt(targetLanguage: targetLanguage, customPrompt: customPrompt)
         let userPrompt = Self.buildUserPrompt(transcript: transcript)
         
         return try await sendChatRequest(
@@ -219,9 +492,7 @@ actor LLMService {
     
     /// Generate a short, relevant title for the meeting based on the transcript
     func generateTitle(transcript: String) async throws -> String {
-        AppLogger.info("Запит на генерацію назви наради")
-        let model = AppSettings.shared.llmModel
-        let endpoint = AppSettings.shared.llmEndpoint
+        AppLogger.info("Meeting title generation request")
         
         let prompt = """
         Напиши КОРОТКУ, інформативну назву для цієї наради на основі транскрипту (максимум 5-6 слів).
@@ -232,23 +503,30 @@ actor LLMService {
         \(String(transcript.prefix(3000))) // Use first 3000 chars to save time
         """
         
+        let messages = [
+            ChatMessage(role: "system", content: "Ти асистент, що генерує короткі та влучні назви."),
+            ChatMessage(role: "user", content: prompt)
+        ]
+        
+        if let result = try await executeWithDeepMLXIfEnabled(messages: messages, maxTokens: 64) {
+            return result.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\"", with: "")
+        }
+        
+        let model = await MainActor.run { AppSettings.shared.llmModel }
+        let endpoint = await MainActor.run { AppSettings.shared.llmEndpoint }
+        
         let result = try await sendChatRequest(
             model: model,
             endpoint: endpoint,
-            messages: [
-                ChatMessage(role: "system", content: "Ти асистент, що генерує короткі та влучні назви."),
-                ChatMessage(role: "user", content: prompt)
-            ]
+            messages: messages
         )
         
         return result.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\"", with: "")
     }
     
     /// Answer a user question based on the transcript
-    func answerQuestion(transcript: String, question: String, history: [ChatMessage] = []) async throws -> String {
-        AppLogger.info("Запит на відповідь на питання")
-        let model = AppSettings.shared.llmModel
-        let endpoint = AppSettings.shared.llmEndpoint
+    func answerQuestion(transcript: String, question: String, history: [LLMService.ChatMessage] = []) async throws -> String {
+        AppLogger.info("Q&A question answer request")
         
         let systemPrompt = """
         Ти — асистент для аналізу нарад. Відповідай на питання користувача базуючись ТІЛЬКИ на наданому транскрипті.
@@ -262,6 +540,13 @@ actor LLMService {
         messages.append(contentsOf: history)
         messages.append(ChatMessage(role: "user", content: question))
         
+        if let result = try await executeWithDeepMLXIfEnabled(messages: messages, maxTokens: 1024) {
+            return result
+        }
+        
+        let model = await MainActor.run { AppSettings.shared.llmModel }
+        let endpoint = await MainActor.run { AppSettings.shared.llmEndpoint }
+        
         return try await sendChatRequest(
             model: model,
             endpoint: endpoint,
@@ -271,9 +556,7 @@ actor LLMService {
     
     /// Translate transcript or summary
     func translateText(text: String, to languageName: String) async throws -> String {
-        AppLogger.info("Запит на переклад тексту на \(languageName)")
-        let model = AppSettings.shared.llmModel
-        let endpoint = AppSettings.shared.llmEndpoint
+        AppLogger.info("Text translation request to \(languageName)")
         
         let prompt = """
         Переклади наступний текст на таку мову: \(languageName).
@@ -284,18 +567,29 @@ actor LLMService {
         \(text)
         """
         
+        let messages = [
+            ChatMessage(role: "system", content: "Ти професійний перекладач. Тільки перекладай текст, без додаткових коментарів."),
+            ChatMessage(role: "user", content: prompt)
+        ]
+        
+        if let result = try await executeWithDeepMLXIfEnabled(messages: messages, maxTokens: 2048) {
+            return result
+        }
+        
+        let model = await MainActor.run { AppSettings.shared.llmModel }
+        let endpoint = await MainActor.run { AppSettings.shared.llmEndpoint }
+        
         return try await sendChatRequest(
             model: model,
             endpoint: endpoint,
-            messages: [
-                ChatMessage(role: "system", content: "Ти професійний перекладач. Тільки перекладай текст, без додаткових коментарів."),
-                ChatMessage(role: "user", content: prompt)
-            ]
+            messages: messages
         )
     }
 
     /// Generic streaming response generation
-    func generateResponseStream(prompt: String, systemPrompt: String) -> AsyncThrowingStream<String, Error> {
+    func generateResponseStream(prompt: String, systemPrompt: String) async -> AsyncThrowingStream<String, Error> {
+        cancelUnloadTask()
+        
         return AsyncThrowingStream { continuation in
             Task {
                 do {
@@ -304,25 +598,28 @@ actor LLMService {
                         ChatMessage(role: "user", content: prompt)
                     ]
                     
-                    let provider = AppSettings.shared.llmProvider
-                    let request = ChatRequest(
-                        model: AppSettings.shared.llmModel,
-                        messages: messages,
-                        stream: true,
-                        options: .init(temperature: 0.7, num_predict: 2048, top_p: 0.9)
-                    )
+                    let provider = await MainActor.run { AppSettings.shared.llmProvider }
+                    let model = await MainActor.run { AppSettings.shared.llmModel }
                     
-                    let endpoint = AppSettings.shared.llmEndpoint
+                    let endpoint = await MainActor.run { AppSettings.shared.llmEndpoint }
                     let path = provider == .lmStudio ? Constants.openaiChatPath : Constants.ollamaChatPath
                     
-                    guard let url = URL(string: "\(endpoint)\(path)") else {
+                    guard let url = Self.apiURL(endpoint: endpoint, provider: provider, path: path) else {
                         continuation.finish(throwing: URLError(.badURL))
                         return
                     }
                     
                     var urlRequest = URLRequest(url: url)
                     urlRequest.httpMethod = "POST"
-                    urlRequest.httpBody = try JSONEncoder().encode(request)
+                    urlRequest.httpBody = try Self.encodedChatRequestData(
+                        provider: provider,
+                        model: model,
+                        messages: messages,
+                        stream: true,
+                        temperature: 0.7,
+                        maxTokens: 2048,
+                        topP: 0.9
+                    )
                     urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
                     
                     updateState(.generating)
@@ -341,9 +638,11 @@ actor LLMService {
                     
                     updateState(.idle)
                     continuation.finish()
+                    scheduleAutoUnload()
                 } catch {
                     updateState(.idle)
                     continuation.finish(throwing: error)
+                    scheduleAutoUnload()
                 }
             }
         }
@@ -352,7 +651,7 @@ actor LLMService {
     // MARK: - Chunked Summary (Long Meetings)
     
     private func generateChunkedSummary(transcript: String, model: String, endpoint: String, targetLanguage: String?) async throws -> String {
-        AppLogger.info("Транскрипт завеликий, розбиваємо на частини...")
+        AppLogger.info("Transcript too large, splitting into chunks...")
         
         let words = transcript.components(separatedBy: .whitespacesAndNewlines)
         let wordsPerChunk = Constants.maxTokensPerChunk * 2
@@ -367,7 +666,7 @@ actor LLMService {
         var chunkSummaries: [String] = []
         
         for (index, chunk) in chunks.enumerated() {
-            AppLogger.info("Генерація резюме для частини \(index + 1)/\(chunks.count)")
+            AppLogger.info("Generating summary for chunk \(index + 1)/\(chunks.count)")
             let chunkPrompt = """
             Це частина \(index + 1) з \(chunks.count) великої наради.
             Зроби коротке резюме цієї частини. Виділи тільки ключові моменти.
@@ -388,6 +687,7 @@ actor LLMService {
         }
         
         // Merge summaries
+        let customPrompt = await MainActor.run { AppSettings.shared.customSummaryPrompt }
         let mergePrompt = """
         Об'єднай наступні часткові резюме наради в одне цілісне резюме.
         Видали дублікати. Збережи формат відповіді (Markdown).
@@ -400,7 +700,7 @@ actor LLMService {
             model: model,
             endpoint: endpoint,
             messages: [
-                ChatMessage(role: "system", content: Self.buildSystemPrompt(targetLanguage: targetLanguage)),
+                ChatMessage(role: "system", content: Self.buildSystemPrompt(targetLanguage: targetLanguage, customPrompt: customPrompt)),
                 ChatMessage(role: "user", content: mergePrompt)
             ]
         )
@@ -409,29 +709,32 @@ actor LLMService {
     // MARK: - Chat Request with Streaming
     
     private func sendChatRequest(model: String, endpoint: String, messages: [ChatMessage]) async throws -> String {
-        let provider = AppSettings.shared.llmProvider
+        let provider = await MainActor.run { AppSettings.shared.llmProvider }
         let path = provider == .lmStudio ? Constants.openaiChatPath : Constants.ollamaChatPath
         
-        guard let url = URL(string: "\(endpoint)\(path)") else {
+        guard let url = Self.apiURL(endpoint: endpoint, provider: provider, path: path) else {
             throw LLMError.invalidEndpoint
         }
-        
-        let requestBody = ChatRequest(
-            model: model,
-            messages: messages,
-            stream: true,
-            options: ChatRequest.Options(
-                temperature: 0.3,
-                num_predict: 4096,
-                top_p: 0.9
-            )
-        )
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = Constants.llmRequestTimeout
-        request.httpBody = try JSONEncoder().encode(requestBody)
+        request.httpBody = try Self.encodedChatRequestData(
+            provider: provider,
+            model: model,
+            messages: messages,
+            stream: true,
+            temperature: 0.3,
+            maxTokens: 4096,
+            topP: 0.9
+        )
+        
+        cancelUnloadTask()
+        
+        defer {
+            scheduleAutoUnload()
+        }
         
         updateState(.generating)
         
@@ -461,6 +764,9 @@ actor LLMService {
             }
             
             updateState(.idle)
+            guard !fullResponse.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw LLMError.emptyResponse
+            }
             return fullResponse
             
         } catch let error as LLMError {
@@ -474,15 +780,15 @@ actor LLMService {
     
     // MARK: - Prompt Templates
     
-    private static func buildSystemPrompt(targetLanguage: String?) -> String {
+    nonisolated private static func buildSystemPrompt(targetLanguage: String?, customPrompt: String) -> String {
         let languageInstruction: String
         if let targetLanguage, targetLanguage != "auto" {
-            languageInstruction = "Важливо: уся твоя відповідь має бути написана виключно мовою з ISO-кодом '\(targetLanguage)'. Не пиши жодних вступних фраз чи підтверджень про мову, одразу починай резюме."
+            let langName = targetLanguage == "uk" ? "українською" : "англійською"
+            languageInstruction = "Важливо: твоя відповідь має бути написана ВИКЛЮЧНО \(langName) мовою. Не пиши жодних вступних фраз чи підтверджень про мову, одразу починай резюме."
         } else {
             languageInstruction = "Відповідай ТІЄЮ Ж МОВОЮ, якою написано більшу частину транскрипту (за замовчуванням — українською)."
         }
         
-        let customPrompt = AppSettings.shared.customSummaryPrompt
         let customInstruction = customPrompt.isEmpty ? "" : "\nДОДАТКОВІ ІНСТРУКЦІЇ ВІД КОРИСТУВАЧА:\n\(customPrompt)\n"
         
         return """
@@ -498,7 +804,7 @@ actor LLMService {
         """
     }
     
-    private static func buildUserPrompt(transcript: String) -> String {
+    nonisolated private static func buildUserPrompt(transcript: String) -> String {
         """
         Проаналізуй наступний транскрипт наради та створи структуроване резюме.
         
@@ -528,35 +834,44 @@ actor LLMService {
     
     /// Extract speaker names from transcript if they were mentioned
     func extractSpeakerNames(transcript: String) async throws -> [String: String] {
-        AppLogger.info("Запит на витягнення імен спікерів")
-        let model = AppSettings.shared.llmModel
-        let endpoint = AppSettings.shared.llmEndpoint
+        AppLogger.info("Speaker name extraction request")
         
         let prompt = """
-        Проаналізуй транскрипт наради, де кожен сегмент починається з ідентифікатора спікера (наприклад, "Speaker 0:", "Speaker 1:").
-        Твоє завдання — визначити справжні імена людей, якщо вони згадувалися в тексті (наприклад, хтось привітався або представився).
+        Проаналізуй транскрипт наради. Текст подано у форматі "ID: Текст", де ID — це ідентифікатор спікера (наприклад, "S1:", "Speaker 0:", "Невідомий:").
+        Твоє завдання — визначити справжні імена людей, якщо вони згадувалися в тексті (наприклад, коли хтось представляється: "Я Олексій", "Мене звати Марія", "Говорить Андрій").
         
-        Поверни результат ТІЛЬКИ у форматі JSON, де ключ — це ідентифікатор спікера, а значення — його ім'я.
-        Приклад: {"Speaker 0": "Олексій", "Speaker 1": "Марія"}
+        Поверни результат ТІЛЬКИ у форматі JSON, де ключ — це ідентифікатор спікера (точно як у тексті), а значення — його ім'я.
+        Приклад: {"S1": "Алла Тіхановська", "Speaker 0": "Олексій"}
         Якщо ім'я для конкретного спікера неможливо визначити, не додавай його до JSON.
         
         Транскрипт:
-        \(String(transcript.prefix(6000)))
+        \(String(transcript.prefix(8000)))
         """
         
-        let result = try await sendChatRequest(
-            model: model,
-            endpoint: endpoint,
-            messages: [
-                ChatMessage(role: "system", content: "Ти асистент, що витягує імена людей з тексту. Відповідай ТІЛЬКИ чистим JSON."),
-                ChatMessage(role: "user", content: prompt)
-            ]
-        )
+        let messages = [
+            ChatMessage(role: "system", content: "Ти асистент, що витягує імена людей з тексту. Відповідай ТІЛЬКИ чистим JSON."),
+            ChatMessage(role: "user", content: prompt)
+        ]
+        
+        var result: String? = nil
+        if let mlxResult = try await executeWithDeepMLXIfEnabled(messages: messages, maxTokens: 512) {
+            result = mlxResult
+        } else {
+            let model = await MainActor.run { AppSettings.shared.llmModel }
+            let endpoint = await MainActor.run { AppSettings.shared.llmEndpoint }
+            result = try await sendChatRequest(
+                model: model,
+                endpoint: endpoint,
+                messages: messages
+            )
+        }
+        
+        guard let finalResult = result else { return [:] }
         
         // Clean result from markdown code blocks
-        let cleanJSON = result.replacingOccurrences(of: "```json", with: "")
-                              .replacingOccurrences(of: "```", with: "")
-                              .trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanJSON = finalResult.replacingOccurrences(of: "```json", with: "")
+                                  .replacingOccurrences(of: "```", with: "")
+                                  .trimmingCharacters(in: .whitespacesAndNewlines)
         
         guard let data = cleanJSON.data(using: .utf8) else { return [:] }
         return (try? JSONDecoder().decode([String: String].self, from: data)) ?? [:]
@@ -584,7 +899,7 @@ actor LLMService {
         }
     }
     
-    private func updateState(_ newState: ServiceState) {
+    private func updateState(_ newState: LLMServiceState) {
         state = newState
         onStateChanged?(newState)
     }
@@ -601,11 +916,11 @@ enum LLMError: LocalizedError, Sendable {
     var errorDescription: String? {
         switch self {
         case .ollamaNotRunning:
-            return "Ollama не запущено. Відкрийте термінал та виконайте 'ollama serve'."
+            return "Локальний LLM-сервер не запущено. Для Ollama виконайте 'ollama serve', для LM Studio увімкніть Local Server."
         case .modelNotFound(let model):
-            return "Модель '\(model)' не знайдено. Виконайте 'ollama pull \(model)' у терміналі."
+            return "Модель '\(model)' не знайдено серед моделей поточного провайдера. Оновіть список і виберіть доступну модель."
         case .invalidEndpoint:
-            return "Невірна адреса Ollama API."
+            return "Невірна адреса LLM API."
         case .requestFailed(let detail):
             return "Помилка запиту до LLM: \(detail)"
         case .emptyResponse:

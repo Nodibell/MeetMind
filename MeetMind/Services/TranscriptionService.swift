@@ -10,20 +10,24 @@ import AVFoundation
 import WhisperKit
 
 /// On-device speech-to-text transcription using WhisperKit
-actor TranscriptionService {
+actor TranscriptionService: TranscriptionProvider {
 
-    // MARK: - State
     enum ServiceState: Sendable {
         case notReady
         case downloading(progress: Double)
+        case loading
         case ready
         case transcribing(progress: Double)
         case error(String)
     }
 
     private(set) var state: ServiceState = .notReady
+    
     private var whisperKit: WhisperKit?
     private var currentModelName: String = ""
+    private var unloadTask: Task<Void, Never>?
+    private var memoryPressureSource: (any DispatchSourceMemoryPressure)?
+    private let inactivityTimeout: UInt64 = 5 * 60 * 1_000_000_000 // 5 minutes in nanoseconds
 
     // MARK: - Callbacks
     var onStateChanged: (@Sendable (ServiceState) -> Void)?
@@ -41,15 +45,14 @@ actor TranscriptionService {
 
     /// Initialize WhisperKit with specified model
     func initialize(modelName: String? = nil) async throws {
-        let model = modelName ?? AppSettings.shared.whisperModelLive
+        let model = await MainActor.run { modelName ?? AppSettings.shared.whisperModelLive }
         currentModelName = model
-        AppLogger.info("Ініціалізація WhisperKit з моделлю: \(model)")
+        setupMemoryPressureListener()
+        AppLogger.info("Initializing WhisperKit with model: \(model)")
 
         updateState(.downloading(progress: 0))
 
         do {
-            updateState(.downloading(progress: 0))
-
             // 1. Download the model with progress tracking
             let modelFolderURL = try await WhisperKit.download(
                 variant: model,
@@ -60,7 +63,9 @@ actor TranscriptionService {
                 }
             )
 
-            AppLogger.info("Модель завантажена в: \(modelFolderURL.path)")
+            AppLogger.info("Model downloaded to: \(modelFolderURL.path)")
+
+            updateState(.loading)
 
             // 2. Initialize WhisperKit with the EXACT folder path
             let config = WhisperKitConfig(
@@ -73,28 +78,50 @@ actor TranscriptionService {
 
             let pipe = try await WhisperKit(config)
             self.whisperKit = pipe
-            AppLogger.info("WhisperKit успішно ініціалізовано")
+            AppLogger.info("WhisperKit successfully initialized")
             updateState(.ready)
         } catch {
-            AppLogger.error("Помилка завантаження моделі WhisperKit", error: error)
-            updateState(.error("Не вдалося завантажити модель: \(error.localizedDescription)"))
+            AppLogger.error("Failed to load WhisperKit model", error: error)
+            updateState(.error(String(localized: "Не вдалося завантажити модель: \(error.localizedDescription)")))
             throw TranscriptionError.modelLoadFailed(error.localizedDescription)
         }
+    }
+
+    /// Setup listener for system-wide memory pressure
+    func setupMemoryPressureListener() {
+        let source = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
+        source.setEventHandler { [weak self] in
+            let event = source.data
+            if event.contains(.critical) || event.contains(.warning) {
+                AppLogger.systemHealth("Memory pressure detected (\(event)), unloading WhisperKit models...")
+                Task { [weak self] in
+                    await self?.unloadModels()
+                }
+            }
+        }
+        source.resume()
+        self.memoryPressureSource = source
     }
 
     // MARK: - Live Transcription
 
     /// Transcribe audio samples in real-time (streaming chunks)
     func transcribeLive(samples: [Float], offset: TimeInterval = 0) async throws -> [MeetingTranscriptSegment] {
-        AppLogger.debug("Транскрипція live-чанку: \(samples.count) семплів, offset: \(offset)")
+        cancelUnloadTask()
+        AppLogger.debug("Transcribing live chunk: \(samples.count) samples, offset: \(offset)")
+
+        if whisperKit == nil {
+            AppLogger.info("WhisperKit was unloaded, reinitializing...")
+            try await initialize(modelName: currentModelName.isEmpty ? nil : currentModelName)
+        }
 
         guard let whisperKit else {
             throw TranscriptionError.notInitialized
         }
 
         guard !samples.isEmpty else { return [] }
-
-        let language = AppSettings.shared.defaultLanguage
+        
+        let language = await MainActor.run { AppSettings.shared.defaultLanguage }
         let options = DecodingOptions(
             task: .transcribe,
             language: language == "auto" ? nil : language,
@@ -106,6 +133,17 @@ actor TranscriptionService {
         )
 
         updateState(.transcribing(progress: 0.0))
+
+        let startTime = CFAbsoluteTimeGetCurrent()
+        AppLogger.ai("WhisperKit inference started...")
+
+        defer {
+            let duration = CFAbsoluteTimeGetCurrent() - startTime
+            let audioDuration = Double(samples.count) / 16000.0
+            let rtf = audioDuration > 0 ? duration / audioDuration : 0
+            AppLogger.ai("Inference completed in \(String(format: "%.2f", duration))s (RTF: \(String(format: "%.3f", rtf)))")
+            scheduleUnload()
+        }
 
         do {
             let results = try await whisperKit.transcribe(
@@ -122,7 +160,7 @@ actor TranscriptionService {
 
             return segments
         } catch {
-            updateState(.error("Помилка транскрипції: \(error.localizedDescription)"))
+            updateState(.error(String(localized: "Помилка транскрипції: \(error.localizedDescription)")))
             throw TranscriptionError.transcriptionFailed(error.localizedDescription)
         }
     }
@@ -131,9 +169,12 @@ actor TranscriptionService {
 
     /// Full high-quality transcription of an audio file
     func transcribeFile(at url: URL) async throws -> MeetingTranscriptDocument {
+        cancelUnloadTask()
         // Load or switch to high-quality model
-        let postModel = AppSettings.shared.whisperModelPost
-        if currentModelName != postModel {
+        let postModel = await MainActor.run { AppSettings.shared.whisperModelPost }
+        let defaultLanguage = await MainActor.run { AppSettings.shared.defaultLanguage }
+        
+        if currentModelName != postModel || whisperKit == nil {
             try await initialize(modelName: postModel)
         }
 
@@ -141,7 +182,7 @@ actor TranscriptionService {
             throw TranscriptionError.notInitialized
         }
 
-        let language = AppSettings.shared.defaultLanguage
+        let language = defaultLanguage
         let options = DecodingOptions(
             task: .transcribe,
             language: language == "auto" ? nil : language,
@@ -157,6 +198,13 @@ actor TranscriptionService {
         let totalWindows = max(1, Int(ceil(duration / 30.0)))
 
         updateState(.transcribing(progress: 0.0))
+
+        let startTime = CFAbsoluteTimeGetCurrent()
+        AppLogger.ai("File post-processing started (\(String(format: "%.1f", duration))s)...")
+
+        defer {
+            scheduleUnload()
+        }
 
         do {
             let results = try await whisperKit.transcribe(
@@ -208,14 +256,19 @@ actor TranscriptionService {
 
             updateState(.ready)
 
+            let totalTime = CFAbsoluteTimeGetCurrent() - startTime
+            let rtf = duration > 0 ? totalTime / duration : 0
+            AppLogger.ai("Full file post-processing completed in \(String(format: "%.2f", totalTime))s (RTF: \(String(format: "%.3f", rtf)))")
+
             // Switch back to live model for next recording
-            if currentModelName != AppSettings.shared.whisperModelLive {
-                try? await initialize(modelName: AppSettings.shared.whisperModelLive)
+            let liveModel = await MainActor.run { AppSettings.shared.whisperModelLive }
+            if currentModelName != liveModel {
+                try? await initialize(modelName: liveModel)
             }
 
             return document
         } catch {
-            updateState(.error("Помилка транскрипції файлу: \(error.localizedDescription)"))
+            updateState(.error(String(localized: "Помилка транскрипції файлу: \(error.localizedDescription)")))
             throw TranscriptionError.transcriptionFailed(error.localizedDescription)
         }
     }
@@ -280,6 +333,30 @@ actor TranscriptionService {
         if case .ready = state { return true }
         return false
     }
+
+    // MARK: - Memory Management
+
+    /// Unload models from memory to save resources
+    func unloadModels() {
+        AppLogger.info("Unloading WhisperKit models due to inactivity")
+        whisperKit = nil
+        updateState(.notReady)
+    }
+
+    private func scheduleUnload() {
+        cancelUnloadTask()
+        unloadTask = Task { [weak self] in
+            guard let self = self else { return }
+            try? await Task.sleep(nanoseconds: self.inactivityTimeout)
+            guard !Task.isCancelled else { return }
+            await self.unloadModels()
+        }
+    }
+
+    private func cancelUnloadTask() {
+        unloadTask?.cancel()
+        unloadTask = nil
+    }
 }
 
 // MARK: - Errors
@@ -292,13 +369,13 @@ enum TranscriptionError: LocalizedError, Sendable {
     var errorDescription: String? {
         switch self {
         case .notInitialized:
-            return "Сервіс транскрипції не ініціалізовано. Зачекайте завантаження моделі."
+            return String(localized: "Сервіс транскрипції не ініціалізовано. Зачекайте завантаження моделі.")
         case .modelLoadFailed(let detail):
-            return "Не вдалося завантажити модель Whisper: \(detail)"
+            return String(localized: "Не вдалося завантажити модель Whisper: \(detail)")
         case .transcriptionFailed(let detail):
-            return "Помилка транскрипції: \(detail)"
+            return String(localized: "Помилка транскрипції: \(detail)")
         case .audioLoadFailed(let detail):
-            return "Не вдалося завантажити аудіо: \(detail)"
+            return String(localized: "Не вдалося завантажити аудіо: \(detail)")
         }
     }
 }
