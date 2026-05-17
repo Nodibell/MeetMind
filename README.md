@@ -6,11 +6,13 @@
 
 ## Key Features ✨
 
-- **Local Transcription**: Uses Apple's WhisperKit for high-quality speech recognition directly on your Mac (CPU/Neural Engine).
+- **Local Transcription**: Uses Apple's WhisperKit for high-quality speech recognition directly on your Mac (CPU/Neural Engine) with a dedicated **Whisper Language Picker** (Auto-detect, Ukrainian, English).
+- **Target Summary/Notes Language**: Choose whether your final Obsidian meeting notes and action items are written in Ukrainian, English, or dynamically match the transcript language.
+- **Dynamic VRAM/RAM Memory Management**: Customize when models are unloaded from memory (unload immediately after generation, after 1/5/10 minutes of inactivity, or never) supporting **Ollama**, **LM Studio**, and **DeepMLX**.
 - **Speaker Diarization & Identification**: Automatically identifies different speakers and remembers their names across meetings using voice embeddings.
 - **System Audio Support**: Record your microphone, system audio (Zoom/Google Meet), or both simultaneously using ScreenCaptureKit.
 - **Pause & Resume**: Full control over your recording sessions with the ability to pause and continue without losing context.
-- **AI Summaries via Ollama**: Automatically generate key takeaways, action items, and decisions using local LLMs (Llama 3, Mistral, Gemma, etc.).
+- **AI Summaries & Premium Chat Q&A**: Automatically generate key takeaways and action items, and ask questions in an overhauled, beautiful **Meeting Q&A Chat** with modern message bubbles, real-time streaming, and native markdown copy controls.
 - **Obsidian Export**: Direct integration with your Obsidian vault for seamless workflow automation.
 - **Floating Status Indicator**: A sleek, borderless overlay that shows real-time recording status and active speaker identification.
 - **Privacy First**: Your data never leaves your device. No cloud APIs are used for transcription or analysis.
@@ -21,7 +23,7 @@
 - **Swift & SwiftUI**: Modern interface and high performance.
 - **WhisperKit**: OpenAI Whisper port by Argmax optimized for CoreML.
 - **FluidAudio**: Advanced diarization and speaker identification engine.
-- **Ollama**: Local LLM execution.
+- **Ollama, LM Studio & DeepMLX**: Multiple local LLM integration pathways with dynamic memory unloading.
 - **SwiftData**: Reliable persistence for meeting history.
 - **ScreenCaptureKit**: High-quality audio capture.
 
@@ -44,8 +46,12 @@
 ## Configuration ⚙️
 
 1. **Obsidian**: Select your vault folder in the app settings for automatic export.
-2. **Ollama**: Choose your preferred model (e.g., `llama3` or `qwen2.5:14b`) and specify the endpoint (default: `http://localhost:11434`).
-3. **Language**: Select the primary transcription language (Ukrainian/English) or leave it on auto-detect.
+2. **Local LLM Settings**: 
+   * **Ollama**: Choose your model and endpoint (default: `http://localhost:11434`).
+   * **LM Studio**: Compatible with local OpenAI-compatible servers (default: `http://localhost:1234`).
+   * **DeepMLX**: Point directly to local Apple Silicon Metal-optimized MLX model sharded weight directories for zero-server direct local inference.
+   * **Memory Management**: Customize the inactivity auto-unload VRAM/RAM timer to conserve your Mac's hardware resources.
+3. **Language**: Independently choose the Whisper transcription language and the target Obsidian summary language.
 
 ## Privacy 🔒
 
