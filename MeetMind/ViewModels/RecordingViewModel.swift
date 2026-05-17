@@ -427,19 +427,22 @@ final class RecordingViewModel {
                 }
             }
 
-            let targetLanguage = AppSettings.shared.summaryLanguage
+            let targetLanguage = await MainActor.run { AppSettings.shared.summaryLanguage }
             let summaryResult = try await llmService.generateSummary(transcript: transcriptText, targetLanguage: targetLanguage)
 
-            await MainActor.run {
-                self.summary = summaryResult
-                self.streamingSummary = summaryResult
-            }
-
             // Save summary to file
-            let summaryURL = Constants.summariesDirectory
-                .appendingPathComponent("\(currentMeeting?.filenameBase ?? "summary").\(Constants.summaryFileExtension)")
-            try summaryResult.write(to: summaryURL, atomically: true, encoding: .utf8)
-            currentMeeting?.summaryFilename = summaryURL.lastPathComponent
+            if let filenameBase = await MainActor.run(body: { currentMeeting?.filenameBase }) {
+                let summaryURL = Constants.summariesDirectory
+                    .appendingPathComponent("\(filenameBase).\(Constants.summaryFileExtension)")
+                try summaryResult.write(to: summaryURL, atomically: true, encoding: .utf8)
+                
+                await MainActor.run {
+                    self.summary = summaryResult
+                    self.streamingSummary = summaryResult
+                    self.currentMeeting?.summaryFilename = summaryURL.lastPathComponent
+                    try? self.modelContext?.save()
+                }
+            }
 
         } catch {
             await MainActor.run {

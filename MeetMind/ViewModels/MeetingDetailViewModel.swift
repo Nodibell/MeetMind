@@ -314,9 +314,18 @@ final class MeetingDetailViewModel {
                 }
 
                 // Save updated summary
-                if let url = meeting.summaryURL {
-                    try? newSummary.write(to: url, atomically: true, encoding: .utf8)
+                let url: URL
+                if let existingURL = meeting.summaryURL {
+                    url = existingURL
+                } else {
+                    let filename = "\(meeting.filenameBase).\(Constants.summaryFileExtension)"
+                    await MainActor.run {
+                        meeting.summaryFilename = filename
+                        try? modelContext?.save()
+                    }
+                    url = Constants.summariesDirectory.appendingPathComponent(filename)
                 }
+                try? newSummary.write(to: url, atomically: true, encoding: .utf8)
             } catch {
                 await MainActor.run {
                     if !Task.isCancelled {
