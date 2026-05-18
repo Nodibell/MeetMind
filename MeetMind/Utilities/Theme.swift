@@ -10,41 +10,120 @@ import SwiftUI
 enum Theme {
     // MARK: - Color Palette
     enum Colors {
+        private static func dynamicColor(
+            light lightNS: NSColor,
+            dark darkNS: NSColor
+        ) -> Color {
+            Color(nsColor: NSColor(name: nil) { appearance in
+                if appearance.name == .darkAqua || appearance.name == .vibrantDark {
+                    return darkNS
+                } else {
+                    return lightNS
+                }
+            })
+        }
+
         // Primary backgrounds
-        static let backgroundPrimary = Color(nsColor: NSColor(red: 0.08, green: 0.08, blue: 0.12, alpha: 1.0))
-        static let backgroundSecondary = Color(nsColor: NSColor(red: 0.11, green: 0.11, blue: 0.16, alpha: 1.0))
-        static let backgroundTertiary = Color(nsColor: NSColor(red: 0.14, green: 0.14, blue: 0.20, alpha: 1.0))
+        static let backgroundPrimary = dynamicColor(
+            light: NSColor(red: 0.96, green: 0.96, blue: 0.98, alpha: 1.0),
+            dark: NSColor(red: 0.08, green: 0.08, blue: 0.12, alpha: 1.0)
+        )
+        static let backgroundSecondary = dynamicColor(
+            light: NSColor(red: 0.98, green: 0.98, blue: 1.0, alpha: 1.0),
+            dark: NSColor(red: 0.11, green: 0.11, blue: 0.16, alpha: 1.0)
+        )
+        static let backgroundTertiary = dynamicColor(
+            light: NSColor(red: 0.93, green: 0.93, blue: 0.95, alpha: 1.0),
+            dark: NSColor(red: 0.14, green: 0.14, blue: 0.20, alpha: 1.0)
+        )
         
         // Surface (cards, panels)
-        static let surfacePrimary = Color(nsColor: NSColor(red: 0.16, green: 0.16, blue: 0.22, alpha: 1.0))
-        static let surfaceSecondary = Color(nsColor: NSColor(red: 0.20, green: 0.20, blue: 0.27, alpha: 1.0))
-        static let surfaceHover = Color(nsColor: NSColor(red: 0.22, green: 0.22, blue: 0.30, alpha: 1.0))
+        static let surfacePrimary = dynamicColor(
+            light: NSColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0),
+            dark: NSColor(red: 0.16, green: 0.16, blue: 0.22, alpha: 1.0)
+        )
+        static let surfaceSecondary = dynamicColor(
+            light: NSColor(red: 0.95, green: 0.95, blue: 0.97, alpha: 1.0),
+            dark: NSColor(red: 0.20, green: 0.20, blue: 0.27, alpha: 1.0)
+        )
+        static let surfaceHover = dynamicColor(
+            light: NSColor(red: 0.92, green: 0.92, blue: 0.95, alpha: 1.0),
+            dark: NSColor(red: 0.22, green: 0.22, blue: 0.30, alpha: 1.0)
+        )
         
         // Accent gradient
-        static let accentPrimary = Color(nsColor: NSColor(red: 0.45, green: 0.40, blue: 0.95, alpha: 1.0))
-        static let accentSecondary = Color(nsColor: NSColor(red: 0.35, green: 0.55, blue: 1.0, alpha: 1.0))
-        static let accentTertiary = Color(nsColor: NSColor(red: 0.55, green: 0.35, blue: 0.90, alpha: 1.0))
+        static let accentPrimary = dynamicColor(
+            light: NSColor(red: 0.35, green: 0.30, blue: 0.85, alpha: 1.0),
+            dark: NSColor(red: 0.45, green: 0.40, blue: 0.95, alpha: 1.0)
+        )
+        static let accentSecondary = dynamicColor(
+            light: NSColor(red: 0.25, green: 0.45, blue: 0.90, alpha: 1.0),
+            dark: NSColor(red: 0.35, green: 0.55, blue: 1.0, alpha: 1.0)
+        )
+        static let accentTertiary = dynamicColor(
+            light: NSColor(red: 0.45, green: 0.25, blue: 0.80, alpha: 1.0),
+            dark: NSColor(red: 0.55, green: 0.35, blue: 0.90, alpha: 1.0)
+        )
         
         // Status colors
-        static let recording = Color(nsColor: NSColor(red: 1.0, green: 0.27, blue: 0.35, alpha: 1.0))
-        static let recordingGlow = Color(nsColor: NSColor(red: 1.0, green: 0.27, blue: 0.35, alpha: 0.4))
-        static let success = Color(nsColor: NSColor(red: 0.20, green: 0.85, blue: 0.55, alpha: 1.0))
-        static let warning = Color(nsColor: NSColor(red: 1.0, green: 0.75, blue: 0.25, alpha: 1.0))
-        static let error = Color(nsColor: NSColor(red: 1.0, green: 0.35, blue: 0.35, alpha: 1.0))
-        static let processing = Color(nsColor: NSColor(red: 0.40, green: 0.70, blue: 1.0, alpha: 1.0))
+        static let recording = dynamicColor(
+            light: NSColor(red: 0.95, green: 0.20, blue: 0.30, alpha: 1.0),
+            dark: NSColor(red: 1.0, green: 0.27, blue: 0.35, alpha: 1.0)
+        )
+        static let recordingGlow = dynamicColor(
+            light: NSColor(red: 0.95, green: 0.20, blue: 0.30, alpha: 0.3),
+            dark: NSColor(red: 1.0, green: 0.27, blue: 0.35, alpha: 0.4)
+        )
+        static let success = dynamicColor(
+            light: NSColor(red: 0.15, green: 0.75, blue: 0.45, alpha: 1.0),
+            dark: NSColor(red: 0.20, green: 0.85, blue: 0.55, alpha: 1.0)
+        )
+        static let warning = dynamicColor(
+            light: NSColor(red: 0.90, green: 0.65, blue: 0.15, alpha: 1.0),
+            dark: NSColor(red: 1.0, green: 0.75, blue: 0.25, alpha: 1.0)
+        )
+        static let error = dynamicColor(
+            light: NSColor(red: 0.90, green: 0.25, blue: 0.25, alpha: 1.0),
+            dark: NSColor(red: 1.0, green: 0.35, blue: 0.35, alpha: 1.0)
+        )
+        static let processing = dynamicColor(
+            light: NSColor(red: 0.30, green: 0.60, blue: 0.90, alpha: 1.0),
+            dark: NSColor(red: 0.40, green: 0.70, blue: 1.0, alpha: 1.0)
+        )
         
         // Text
-        static let textPrimary = Color(nsColor: NSColor(red: 0.95, green: 0.95, blue: 0.97, alpha: 1.0))
-        static let textSecondary = Color(nsColor: NSColor(red: 0.65, green: 0.65, blue: 0.72, alpha: 1.0))
-        static let textTertiary = Color(nsColor: NSColor(red: 0.45, green: 0.45, blue: 0.52, alpha: 1.0))
+        static let textPrimary = dynamicColor(
+            light: NSColor(red: 0.08, green: 0.08, blue: 0.12, alpha: 1.0),
+            dark: NSColor(red: 0.95, green: 0.95, blue: 0.97, alpha: 1.0)
+        )
+        static let textSecondary = dynamicColor(
+            light: NSColor(red: 0.40, green: 0.40, blue: 0.48, alpha: 1.0),
+            dark: NSColor(red: 0.65, green: 0.65, blue: 0.72, alpha: 1.0)
+        )
+        static let textTertiary = dynamicColor(
+            light: NSColor(red: 0.60, green: 0.60, blue: 0.68, alpha: 1.0),
+            dark: NSColor(red: 0.45, green: 0.45, blue: 0.52, alpha: 1.0)
+        )
         
         // Borders & Dividers
-        static let border = Color(nsColor: NSColor(red: 0.25, green: 0.25, blue: 0.32, alpha: 1.0))
-        static let borderSubtle = Color(nsColor: NSColor(red: 0.20, green: 0.20, blue: 0.26, alpha: 1.0))
+        static let border = dynamicColor(
+            light: NSColor(red: 0.85, green: 0.85, blue: 0.90, alpha: 1.0),
+            dark: NSColor(red: 0.25, green: 0.25, blue: 0.32, alpha: 1.0)
+        )
+        static let borderSubtle = dynamicColor(
+            light: NSColor(red: 0.90, green: 0.90, blue: 0.95, alpha: 1.0),
+            dark: NSColor(red: 0.20, green: 0.20, blue: 0.26, alpha: 1.0)
+        )
         
         // Waveform
-        static let waveformActive = Color(nsColor: NSColor(red: 0.45, green: 0.40, blue: 0.95, alpha: 1.0))
-        static let waveformInactive = Color(nsColor: NSColor(red: 0.25, green: 0.25, blue: 0.35, alpha: 1.0))
+        static let waveformActive = dynamicColor(
+            light: NSColor(red: 0.35, green: 0.30, blue: 0.85, alpha: 1.0),
+            dark: NSColor(red: 0.45, green: 0.40, blue: 0.95, alpha: 1.0)
+        )
+        static let waveformInactive = dynamicColor(
+            light: NSColor(red: 0.80, green: 0.80, blue: 0.85, alpha: 1.0),
+            dark: NSColor(red: 0.25, green: 0.25, blue: 0.35, alpha: 1.0)
+        )
         
         // Tag colors
         static let tagColors: [Color] = [

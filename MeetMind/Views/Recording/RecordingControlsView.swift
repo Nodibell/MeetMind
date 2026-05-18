@@ -21,20 +21,18 @@ struct RecordingControlsView: View {
 
             // Audio Source & Device Block
             VStack(spacing: Theme.Spacing.lg) {
-                // Audio Source Picker
-                Picker("", selection: $viewModel.audioManager.audioSource) {
-                    Label("Мікрофон", systemImage: "mic.fill").tag(AudioManager.AudioSource.microphone)
-                    Label("Система", systemImage: "speaker.wave.2.fill").tag(AudioManager.AudioSource.system)
-                    Label("Мікс", systemImage: "plus.circle.fill").tag(AudioManager.AudioSource.mixed)
+                // Custom Audio Source Picker
+                HStack(spacing: 0) {
+                    customPickerOption("Мікрофон", systemImage: "mic.fill", source: .microphone)
+                    customPickerOption("Система", systemImage: "speaker.wave.2.fill", source: .system)
+                    customPickerOption("Мікс", systemImage: "plus.circle.fill", source: .mixed)
                 }
-                .pickerStyle(.segmented)
+                .padding(Theme.Spacing.xxs)
+                .background(Theme.Colors.backgroundSecondary)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.CornerRadius.md))
+                .overlay(RoundedRectangle(cornerRadius: Theme.CornerRadius.md).stroke(Theme.Colors.border.opacity(0.3), lineWidth: 0.5))
                 .frame(width: 320)
                 .disabled(viewModel.state == .recording)
-                .onChange(of: viewModel.audioManager.audioSource) { _, newSource in
-                    if newSource == .system || newSource == .mixed {
-                        viewModel.refreshSystemAudioSources()
-                    }
-                }
 
                 // Device, system source & language pickers
                 HStack(spacing: Theme.Spacing.md) {
@@ -308,5 +306,31 @@ struct RecordingControlsView: View {
         case .preparing, .stopping, .transcribing, .summarizing: return true
         default: return false
         }
+    }
+
+    @ViewBuilder
+    private func customPickerOption(_ label: String, systemImage: String, source: AudioManager.AudioSource) -> some View {
+        let isSelected = viewModel.audioManager.audioSource == source
+        Button(action: {
+            withAnimation(.interactiveSpring(response: 0.25, dampingFraction: 0.75)) {
+                viewModel.audioManager.audioSource = source
+                if source == .system || source == .mixed {
+                    viewModel.refreshSystemAudioSources()
+                }
+            }
+        }) {
+            HStack(spacing: Theme.Spacing.xs) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 11, weight: .semibold))
+                Text(label)
+                    .font(Theme.Typography.captionMedium)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, Theme.Spacing.xs + 2)
+            .foregroundStyle(isSelected ? .white : Theme.Colors.textSecondary)
+            .background(isSelected ? Theme.Colors.accentPrimary : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.CornerRadius.sm))
+        }
+        .buttonStyle(.plain)
     }
 }
