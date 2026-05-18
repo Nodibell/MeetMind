@@ -9,6 +9,9 @@
 - **Local Transcription**: Uses Apple's WhisperKit for high-quality speech recognition directly on your Mac (CPU/Neural Engine) with a dedicated **Whisper Language Picker** (Auto-detect, Ukrainian, English).
 - **Target Summary/Notes Language**: Choose whether your final Obsidian meeting notes and action items are written in Ukrainian, English, or dynamically match the transcript language.
 - **Dynamic VRAM/RAM Memory Management**: Customize when models are unloaded from memory (unload immediately after generation, after 1/5/10 minutes of inactivity, or never) supporting **Ollama**, **LM Studio**, and **DeepMLX**.
+- **Meeting Intelligence Database**: Relational SwiftData models for `TranscriptSegmentModel`, `ActionItem` (with live two-way toggle-to-file sync), and `Decision`, enabling high-performance local SQL queries.
+- **Resilient Database Auto-Recovery & Backups**: Multi-tiered initializer that detects schema conflicts, copies database files safely to `Backups/MeetMind.store.backup-<timestamp>`, and uses in-app banners for non-destructive diagnostics.
+- **Deep Search & Vault-Independent AI**: Full-text sidebar search over transcript segments, and local semantic AI queries that run 100% offline without demanding an Obsidian Vault path.
 - **Speaker Diarization & Identification**: Automatically identifies different speakers and remembers their names across meetings using voice embeddings.
 - **System Audio Support**: Record your microphone, system audio (Zoom/Google Meet), or both simultaneously using ScreenCaptureKit.
 - **Pause & Resume**: Full control over your recording sessions with the ability to pause and continue without losing context.
@@ -16,7 +19,7 @@
 - **Obsidian Export**: Direct integration with your Obsidian vault for seamless workflow automation.
 - **Floating Status Indicator**: A sleek, borderless overlay that shows real-time recording status and active speaker identification.
 - **Privacy First**: Your data never leaves your device. No cloud APIs are used for transcription or analysis.
-- **Modern Design**: Sleek macOS interface with Glassmorphism, Dark Mode, and a professional onboarding experience.
+- **Modern & Adaptive Design**: Sleek macOS interface with Glassmorphism, a professional onboarding experience, and **fully native, live-switching Light, Dark, and System Theme preferences**.
 
 ## Tech Stack 🛠
 
