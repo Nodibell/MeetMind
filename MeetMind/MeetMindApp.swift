@@ -105,7 +105,7 @@ struct MeetMindApp: App {
                 llmService: llmService
             )
             .environment(\.locale, .init(identifier: appSettings.appLanguage))
-            .frame(minWidth: 900, minHeight: 600)
+            .frame(minWidth: 960, minHeight: 650)
             .background(Theme.Colors.backgroundPrimary)
             .preferredColorScheme(appSettings.preferredColorScheme)
             .onAppear {
