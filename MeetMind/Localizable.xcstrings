@@ -2471,6 +2471,94 @@
           }
         }
       }
+    },
+    "Зовнішній вигляд та Мова": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appearance and Language"
+          }
+        }
+      }
+    },
+    "Тема оформлення": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interface Theme"
+          }
+        }
+      }
+    },
+    "Системна": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System"
+          }
+        }
+      }
+    },
+    "Світла": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Light"
+          }
+        }
+      }
+    },
+    "Темна": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dark"
+          }
+        }
+      }
+    },
+    "Базу даних було відновлено (скинуто)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Database has been restored (reset)"
+          }
+        }
+      }
+    },
+    "Попередній файл бази даних містив помилки міграції. Створено резервну копію в папці Backups: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The previous database file contained migration errors. A backup was created in the Backups folder: %@"
+          }
+        }
+      }
+    },
+    "Зрозуміло": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Understood"
+          }
+        }
+      }
     }
   },
   "version": "1.1"

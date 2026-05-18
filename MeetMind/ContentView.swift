@@ -24,22 +24,64 @@ struct ContentView: View {
     @State private var isShowingRecording = true
     @State private var isShowingOnboarding = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var dbErrorPresented = false
     
     // ViewModels
     @State private var recordingVM: RecordingViewModel?
     @State private var meetingListVM = MeetingListViewModel()
     
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            sidebar
-                .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
-        } detail: {
-            detailContent
+        VStack(spacing: 0) {
+            if dbErrorPresented, let dbError = MeetMindApp.dbInitializationError {
+                HStack(spacing: Theme.Spacing.md) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.yellow)
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Базу даних було відновлено (скинуто)")
+                            .font(.headline)
+                            .foregroundStyle(Theme.Colors.textPrimary)
+                        Text("Попередній файл бази даних містив помилки міграції. Створено резервну копію в папці Backups: \(dbError)")
+                            .font(.caption)
+                            .foregroundStyle(Theme.Colors.textSecondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Button("Зрозуміло") {
+                        withAnimation {
+                            dbErrorPresented = false
+                            MeetMindApp.dbInitializationError = nil
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding()
+                .background(Color.yellow.opacity(0.1))
+                .overlay(Rectangle().stroke(Color.yellow.opacity(0.3), lineWidth: 1))
+                .transition(.move(edge: .top))
+            }
+            
+            NavigationSplitView(columnVisibility: $columnVisibility) {
+                sidebar
+                    .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
+            } detail: {
+                detailContent
+            }
         }
         .navigationTitle("")
         .onAppear {
             setupViewModels()
             checkFirstRun()
+            dbErrorPresented = MeetMindApp.dbInitializationError != nil
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .startNewRecording)) { _ in
+            isShowingGlobalSearch = false
+            isShowingActionItems = false
+            isShowingRecording = true
+            selectedMeetingID = nil
+            recordingVM?.resetForNewRecording()
         }
         .sheet(isPresented: $isShowingOnboarding) {
             OnboardingView(transcriptionService: transcriptionService) {

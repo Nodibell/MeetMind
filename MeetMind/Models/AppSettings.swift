@@ -7,6 +7,7 @@
 
 import Foundation
 import AppKit
+import SwiftUI
 
 /// Application settings backed by UserDefaults.
 ///
@@ -39,6 +40,7 @@ final class AppSettings: @unchecked Sendable {
         static let watchFolderPath          = "watchFolderPath"
         static let autoProcessWatchFolder   = "autoProcessWatchFolder"
         static let appLanguage              = "appLanguage"
+        static let appTheme                 = "appTheme"
         static let waveformFPS              = "waveformFPS"
         static let llmModelUnloadTimeout    = "llmModelUnloadTimeout"
     }
@@ -47,6 +49,35 @@ final class AppSettings: @unchecked Sendable {
     
     var appLanguage: String {
         didSet { UserDefaults.standard.set(appLanguage, forKey: Keys.appLanguage) }
+    }
+
+    // MARK: - App Theme
+    
+    public enum AppTheme: String, CaseIterable, Identifiable, Codable, Sendable {
+        case system = "system"
+        case light = "light"
+        case dark = "dark"
+        public var id: String { rawValue }
+        
+        public var displayName: String {
+            switch self {
+            case .system: return String(localized: "Системна")
+            case .light: return String(localized: "Світла")
+            case .dark: return String(localized: "Темна")
+            }
+        }
+    }
+    
+    var appTheme: AppTheme {
+        didSet { UserDefaults.standard.set(appTheme.rawValue, forKey: Keys.appTheme) }
+    }
+    
+    var preferredColorScheme: SwiftUI.ColorScheme? {
+        switch appTheme {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
     }
 
     // MARK: - Visuals
@@ -196,6 +227,14 @@ final class AppSettings: @unchecked Sendable {
         defaultLanguage         = UserDefaults.standard.string(forKey: Keys.defaultLanguage) ?? Constants.defaultLanguage
         summaryLanguage         = UserDefaults.standard.string(forKey: Keys.summaryLanguage) ?? "auto"
         appLanguage             = UserDefaults.standard.string(forKey: Keys.appLanguage) ?? "uk"
+        
+        if let themeStr = UserDefaults.standard.string(forKey: Keys.appTheme),
+           let theme = AppTheme(rawValue: themeStr) {
+            appTheme = theme
+        } else {
+            appTheme = .system
+        }
+        
         let savedFPS = UserDefaults.standard.integer(forKey: Keys.waveformFPS)
         waveformFPS = savedFPS == 0 ? 60 : savedFPS
         

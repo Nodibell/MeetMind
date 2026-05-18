@@ -121,7 +121,8 @@ struct MeetingListView: View {
         } else {
             result = meetings.filter { meeting in
                 meeting.title.localizedCaseInsensitiveContains(viewModel.searchText) ||
-                meeting.tags.contains(where: { $0.localizedCaseInsensitiveContains(viewModel.searchText) })
+                meeting.tags.contains(where: { $0.localizedCaseInsensitiveContains(viewModel.searchText) }) ||
+                meeting.transcriptSegments.contains(where: { $0.text.localizedCaseInsensitiveContains(viewModel.searchText) })
             }
         }
         

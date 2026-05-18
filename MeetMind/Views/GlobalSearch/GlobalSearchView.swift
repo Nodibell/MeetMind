@@ -144,21 +144,31 @@ struct GlobalSearchView: View {
             // Build context from all meetings
             var contexts: [String] = []
             
-            guard let vaultURL = AppSettings.shared.obsidianVaultPath else {
-                return
-            }
-            
-            let accessGranted = vaultURL.startAccessingSecurityScopedResource()
-            defer { if accessGranted { vaultURL.stopAccessingSecurityScopedResource() } }
-            
             do {
                 let fm = FileManager.default
                 for meeting in allMeetings {
+                    var contextText = ""
+                    
+                    // 1. Add Summary (if available)
                     if let url = meeting.summaryURL,
                        fm.fileExists(atPath: url.path),
                        let summary = try? String(contentsOf: url, encoding: .utf8),
                        !summary.isEmpty {
-                        contexts.append("Нарада: \(meeting.title) (\(meeting.date.shortDisplayFormatted))\nЗміст: \(summary)")
+                        contextText += "Резюме:\n\(summary)\n"
+                    }
+                    
+                    // 2. Add Transcript Segments (if available)
+                    if !meeting.transcriptSegments.isEmpty {
+                        let sortedSegments = meeting.transcriptSegments.sorted(by: { $0.startTime < $1.startTime })
+                        let transcriptText = sortedSegments.map { segment in
+                            "[\(segment.timestampRange)] \(segment.displayName): \(segment.text)"
+                        }.joined(separator: "\n")
+                        
+                        contextText += "Стенограма (фрагмент):\n\(transcriptText.truncated(to: 2500))\n"
+                    }
+                    
+                    if !contextText.isEmpty {
+                        contexts.append("Нарада: \(meeting.title) (\(meeting.date.shortDisplayFormatted))\n\(contextText)")
                     }
                 }
                 let context = contexts.joined(separator: "\n\n---\n\n")

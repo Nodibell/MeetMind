@@ -17,6 +17,11 @@ extension UUID {
     static let actionItems = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
 }
 
+// MARK: - Special Notifications
+extension Notification.Name {
+    static let startNewRecording = Notification.Name("startNewRecording")
+}
+
 // MARK: - TimeInterval Formatting
 extension TimeInterval {
     /// Formats as "HH:MM:SS"

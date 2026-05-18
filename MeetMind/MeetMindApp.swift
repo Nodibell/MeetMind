@@ -11,11 +11,18 @@ import SwiftData
 @main
 struct MeetMindApp: App {
     
+    // MARK: - SwiftData DB Diagnostics
+    static var dbInitializationError: String? = nil
+    static var isBackupCreated: Bool = false
+    
     // MARK: - SwiftData
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Meeting.self,
             SpeakerProfile.self,
+            TranscriptSegment.self,
+            ActionItem.self,
+            Decision.self
         ])
         let url = URL.applicationSupportDirectory.appending(path: "MeetMind.store")
         let modelConfiguration = ModelConfiguration(schema: schema, url: url)
@@ -25,13 +32,57 @@ struct MeetMindApp: App {
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
-            AppLogger.error("Failed to create ModelContainer, attempting to reset: \(error)")
-            // Fallback: delete corrupted store and try again
-            try? FileManager.default.removeItem(at: url)
+            AppLogger.error("Failed to create ModelContainer: \(error)")
+            
+            // Backup the corrupt database files
+            let fm = FileManager.default
+            let timestamp = Int(Date().timeIntervalSince1970)
+            let backupFolder = URL.applicationSupportDirectory.appending(path: "Backups")
+            try? fm.createDirectory(at: backupFolder, withIntermediateDirectories: true)
+            
+            let filesToBackup = [
+                "MeetMind.store",
+                "MeetMind.store-wal",
+                "MeetMind.store-shm"
+            ]
+            
+            var backupDone = false
+            for filename in filesToBackup {
+                let fileURL = URL.applicationSupportDirectory.appending(path: filename)
+                if fm.fileExists(atPath: fileURL.path) {
+                    let backupFileURL = backupFolder.appending(path: "\(filename).backup-\(timestamp)")
+                    do {
+                        try fm.copyItem(at: fileURL, to: backupFileURL)
+                        AppLogger.info("Successfully backed up \(filename) to \(backupFileURL.path)")
+                        backupDone = true
+                    } catch {
+                        AppLogger.error("Failed to backup \(filename) to \(backupFileURL.path): \(error)")
+                    }
+                }
+            }
+            
+            Self.isBackupCreated = backupDone
+            Self.dbInitializationError = error.localizedDescription
+            
+            // Attempt clean reset so the user can still use the app
             do {
+                for filename in filesToBackup {
+                    let fileURL = URL.applicationSupportDirectory.appending(path: filename)
+                    try? fm.removeItem(at: fileURL)
+                }
+                
                 return try ModelContainer(for: schema, configurations: [modelConfiguration])
             } catch {
-                fatalError("Could not create ModelContainer even after reset: \(error)")
+                AppLogger.error("Second attempt after reset failed: \(error)")
+                Self.dbInitializationError = "Critical Database Failure: \(error.localizedDescription)"
+                
+                // Final safe fallback: in-memory store so the app does not crash
+                let inMemoryConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+                do {
+                    return try ModelContainer(for: schema, configurations: [inMemoryConfig])
+                } catch {
+                    fatalError("InMemory container failed: \(error)")
+                }
             }
         }
     }()
@@ -56,7 +107,7 @@ struct MeetMindApp: App {
             .environment(\.locale, .init(identifier: appSettings.appLanguage))
             .frame(minWidth: 900, minHeight: 600)
             .background(Theme.Colors.backgroundPrimary)
-            .preferredColorScheme(.dark)
+            .preferredColorScheme(appSettings.preferredColorScheme)
             .onAppear {
                 configureAppAppearance()
                 // Initialize SettingsViewModel eagerly so it's ready when Settings opens
@@ -84,14 +135,19 @@ struct MeetMindApp: App {
                     }
                 }
             }
+            .onChange(of: appSettings.appTheme) { _, _ in
+                configureAppAppearance()
+            }
         }
         .modelContainer(sharedModelContainer)
         .windowStyle(.automatic)
         .defaultSize(width: 1100, height: 700)
         .commands {
             CommandGroup(after: .newItem) {
-                Button("Новий запис") { }
-                    .keyboardShortcut("r", modifiers: [.command])
+                Button("Новий запис") {
+                    NotificationCenter.default.post(name: .startNewRecording, object: nil)
+                }
+                .keyboardShortcut("r", modifiers: [.command])
             }
         }
 
@@ -110,6 +166,13 @@ struct MeetMindApp: App {
     // MARK: - Appearance
 
     private func configureAppAppearance() {
-        NSApp.appearance = NSAppearance(named: .darkAqua)
+        switch appSettings.appTheme {
+        case .system:
+            NSApp.appearance = nil
+        case .light:
+            NSApp.appearance = NSAppearance(named: .aqua)
+        case .dark:
+            NSApp.appearance = NSAppearance(named: .darkAqua)
+        }
     }
 }

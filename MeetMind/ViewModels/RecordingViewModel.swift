@@ -452,6 +452,9 @@ final class RecordingViewModel {
 
         // Complete
         await MainActor.run {
+            if let context = self.modelContext {
+                self.currentMeeting?.syncStructuredEntities(modelContext: context)
+            }
             currentMeeting?.status = .complete
             try? modelContext?.save()
             

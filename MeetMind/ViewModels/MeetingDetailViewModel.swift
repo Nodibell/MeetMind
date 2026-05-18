@@ -65,6 +65,12 @@ final class MeetingDetailViewModel {
         await loadTranscript()
         await loadSummary()
         
+        if let context = modelContext {
+            await MainActor.run {
+                self.meeting.syncStructuredEntities(modelContext: context)
+            }
+        }
+        
         // Auto-detect names if not already set
         if meeting.speakerMetadata.allSatisfy({ $0.name == nil }) {
             await autoDetectSpeakerNames()

@@ -40,10 +40,16 @@ struct SettingsView: View {
 
     private var generalTab: some View {
         Form {
-            Section("Мова") {
+            Section("Зовнішній вигляд та Мова") {
                 Picker("Мова інтерфейсу", selection: $viewModel.settings.appLanguage) {
                     Text("Українська").tag("uk")
                     Text("English").tag("en")
+                }
+                
+                Picker("Тема оформлення", selection: $viewModel.settings.appTheme) {
+                    ForEach(AppSettings.AppTheme.allCases) { theme in
+                        Text(theme.displayName).tag(theme)
+                    }
                 }
 
                 Picker("Транскрипція (за замовчуванням)", selection: $viewModel.settings.defaultLanguage) {

@@ -1,8 +1,8 @@
 import SwiftUI
 import SwiftData
 
-struct ActionItem: Identifiable {
-    let id: UUID // Use the meeting ID + text hash or similar to identify unique tasks if needed, but for now meetingID + text is enough
+struct ActionItemUI: Identifiable {
+    let id: UUID
     var text: String
     let meetingTitle: String
     let meetingID: UUID
@@ -13,7 +13,7 @@ struct ActionItem: Identifiable {
 struct ActionItemsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var meetings: [Meeting]
-    @State private var actionItems: [ActionItem] = []
+    @State private var actionItems: [ActionItemUI] = []
     @State private var isLoading = true
     @State private var hideCompleted = false
     
@@ -83,86 +83,72 @@ struct ActionItemsView: View {
         .background(Theme.Colors.backgroundSecondary.opacity(0.5))
     }
     
-    private var filteredItems: [ActionItem] {
+    private var filteredItems: [ActionItemUI] {
         if hideCompleted {
             return actionItems.filter { !$0.isCompleted }
         }
         return actionItems
     }
     
-    private func deleteTask(_ item: ActionItem) {
+    private func deleteTask(_ item: ActionItemUI) {
         // Find the meeting
-        guard let meeting = meetings.first(where: { $0.id == item.meetingID }),
-              let url = meeting.summaryURL else { return }
+        guard let meeting = meetings.first(where: { $0.id == item.meetingID }) else { return }
         
-        do {
-            let summary = try String(contentsOf: url, encoding: .utf8)
-            
-            let lines = summary.components(separatedBy: CharacterSet.newlines)
-            var newLines: [String] = []
-            var found = false
-            
-            let targetCheck = item.isCompleted ? "- [x]" : "- [ ]"
-            
-            for line in lines {
-                if !found && line.contains(targetCheck) && line.contains(item.text) {
-                    found = true
-                    // Skip this line
-                } else {
-                    newLines.append(line)
-                }
-            }
-            
-            let newSummary = newLines.joined(separator: "\n")
-            try newSummary.write(to: url, atomically: true, encoding: .utf8)
-            
-            // Refresh UI
-            loadActionItems()
-            
-        } catch {
-            AppLogger.error("Failed to delete task", error: error)
+        // 1. Delete from database
+        if let dbItem = meeting.actionItems.first(where: { $0.id == item.id }) {
+            modelContext.delete(dbItem)
+            try? modelContext.save()
         }
+        
+        // 2. Delete from markdown file
+        if let url = meeting.summaryURL {
+            do {
+                let summary = try String(contentsOf: url, encoding: .utf8)
+                
+                let lines = summary.components(separatedBy: CharacterSet.newlines)
+                var newLines: [String] = []
+                var found = false
+                
+                let targetCheck = item.isCompleted ? "- [x]" : "- [ ]"
+                
+                for line in lines {
+                    if !found && line.contains(targetCheck) && line.contains(item.text) {
+                        found = true
+                        // Skip this line
+                    } else {
+                        newLines.append(line)
+                    }
+                }
+                
+                let newSummary = newLines.joined(separator: "\n")
+                try newSummary.write(to: url, atomically: true, encoding: .utf8)
+                
+            } catch {
+                AppLogger.error("Failed to delete task in markdown file", error: error)
+            }
+        }
+        
+        // Refresh UI
+        loadActionItems()
     }
     
     private func loadActionItems() {
         isLoading = true
-        var items: [ActionItem] = []
+        var items: [ActionItemUI] = []
         
         for meeting in meetings {
-            if let url = meeting.summaryURL,
-               let summary = try? String(contentsOf: url, encoding: .utf8) {
-                
-                let lines = summary.components(separatedBy: CharacterSet.newlines)
-                for line in lines {
-                    let trimmed = line.trimmingCharacters(in: CharacterSet.whitespaces)
-                    if trimmed.hasPrefix("- [ ]") || trimmed.hasPrefix("- [x]") {
-                        let isDone = trimmed.hasPrefix("- [x]")
-                        var text = trimmed.replacingOccurrences(of: "- [ ]", with: "")
-                                          .replacingOccurrences(of: "- [x]", with: "")
-                                          .trimmingCharacters(in: CharacterSet.whitespaces)
-                        
-                        // Extract assignee (e.g. "(Name)" or "@Name" at the end)
-                        var assignee: String? = nil
-                        let regexAssignee = try? NSRegularExpression(pattern: #"\(([^)]+)\)$|@(\w+)$"#, options: [])
-                        if let match = regexAssignee?.firstMatch(in: text, options: [], range: NSRange(text.startIndex..., in: text)) {
-                            if let range = Range(match.range(at: 1), in: text) ?? Range(match.range(at: 2), in: text) {
-                                assignee = String(text[range])
-                                text = text.replacingCharacters(in: Range(match.range, in: text)!, with: "").trimmingCharacters(in: CharacterSet.whitespaces)
-                            }
-                        }
-                        
-                        if !text.isEmpty {
-                            items.append(ActionItem(
-                                id: UUID(),
-                                text: text,
-                                meetingTitle: meeting.title,
-                                meetingID: meeting.id,
-                                isCompleted: isDone,
-                                assignee: assignee
-                            ))
-                        }
-                    }
-                }
+            // First sync to make sure we're up to date
+            meeting.syncStructuredEntities(modelContext: modelContext)
+            
+            for item in meeting.actionItems {
+                items.append(ActionItemUI(
+                    id: item.id,
+                    text: item.text,
+                    meetingTitle: meeting.title,
+                    meetingID: meeting.id,
+                    isCompleted: item.isCompleted,
+                    assignee: item.assignee
+                ))
             }
         }
         
@@ -170,42 +156,47 @@ struct ActionItemsView: View {
         self.isLoading = false
     }
     
-    private func toggleTask(_ item: ActionItem) {
+    private func toggleTask(_ item: ActionItemUI) {
         // Find the meeting
-        guard let meeting = meetings.first(where: { $0.id == item.meetingID }),
-              let url = meeting.summaryURL else { return }
+        guard let meeting = meetings.first(where: { $0.id == item.meetingID }) else { return }
         
-        do {
-            var summary = try String(contentsOf: url, encoding: .utf8)
-            
-            // Very simple replacement logic: find the line that contains this task and toggle checkbox
-            let oldCheck = item.isCompleted ? "- [x]" : "- [ ]"
-            let newCheck = item.isCompleted ? "- [ ]" : "- [x]"
-            
-            // We need to be careful with matching to avoid false positives. 
-            // We search for the specific line.
-            let lines = summary.components(separatedBy: CharacterSet.newlines)
-            var newLines: [String] = []
-            var found = false
-            
-            for line in lines {
-                if !found && line.contains(oldCheck) && line.contains(item.text) {
-                    newLines.append(line.replacingOccurrences(of: oldCheck, with: newCheck))
-                    found = true
-                } else {
-                    newLines.append(line)
-                }
-            }
-            
-            summary = newLines.joined(separator: "\n")
-            try summary.write(to: url, atomically: true, encoding: .utf8)
-            
-            // Refresh UI
-            loadActionItems()
-            
-        } catch {
-            AppLogger.error("Failed to toggle task", error: error)
+        // 1. Update database
+        if let dbItem = meeting.actionItems.first(where: { $0.id == item.id }) {
+            dbItem.isCompleted.toggle()
+            try? modelContext.save()
         }
+        
+        // 2. Update markdown file
+        if let url = meeting.summaryURL {
+            do {
+                var summary = try String(contentsOf: url, encoding: .utf8)
+                
+                let oldCheck = item.isCompleted ? "- [x]" : "- [ ]"
+                let newCheck = item.isCompleted ? "- [ ]" : "- [x]"
+                
+                let lines = summary.components(separatedBy: CharacterSet.newlines)
+                var newLines: [String] = []
+                var found = false
+                
+                for line in lines {
+                    if !found && line.contains(oldCheck) && line.contains(item.text) {
+                        newLines.append(line.replacingOccurrences(of: oldCheck, with: newCheck))
+                        found = true
+                    } else {
+                        newLines.append(line)
+                    }
+                }
+                
+                summary = newLines.joined(separator: "\n")
+                try summary.write(to: url, atomically: true, encoding: .utf8)
+                
+            } catch {
+                AppLogger.error("Failed to toggle task in markdown file", error: error)
+            }
+        }
+        
+        // Refresh UI
+        loadActionItems()
     }
     
     private var emptyState: some View {
@@ -227,7 +218,7 @@ struct ActionItemsView: View {
 }
 
 struct ActionItemRow: View {
-    let item: ActionItem
+    let item: ActionItemUI
     let onToggle: () -> Void
     
     var body: some View {
