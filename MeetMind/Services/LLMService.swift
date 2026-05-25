@@ -459,8 +459,8 @@ actor LLMService: LLMProvider {
         let customPrompt = await MainActor.run { AppSettings.shared.customSummaryPrompt }
         
         if provider == .deepMLX {
-            let systemPrompt = DeepLLMService.buildDeepSummarySystemPrompt(targetLanguage: targetLanguage, customPrompt: customPrompt)
-            let userPrompt = DeepLLMService.buildDeepSummaryUserPrompt(transcript: transcript)
+            let systemPrompt = Self.buildSystemPrompt(targetLanguage: targetLanguage, customPrompt: customPrompt)
+            let userPrompt = Self.buildUserPrompt(transcript: transcript)
             let messages = [
                 ChatMessage(role: "system", content: systemPrompt),
                 ChatMessage(role: "user", content: userPrompt)

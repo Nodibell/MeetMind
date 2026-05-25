@@ -53,6 +53,8 @@ final class MeetMindIntegrationTests: XCTestCase {
         let segmentId1 = UUID()
         let segmentId2 = UUID()
         let mockTranscriptDoc = MeetingTranscriptDocument(
+            meetingId: meeting.id,
+            createdAt: Date(),
             language: "uk",
             segments: [
                 MeetingTranscriptSegment(
@@ -212,23 +214,23 @@ final class MeetMindIntegrationTests: XCTestCase {
         
         // Verify Action Items parsed, assignee extracted, and completed status synced
         XCTAssertEqual(meeting.actionItems.count, 3)
-        let sortedActions = meeting.actionItems.sorted(by: { $0.text })
+        let sortedActions = meeting.actionItems.sorted(by: { $0.text < $1.text })
         
         // "Завершити рефакторинг моделей бази даних" -> assignee: "Олексій", isCompleted: false
         let action1 = sortedActions.first(where: { $0.text.contains("рефакторинг") })
-        XCTNotNil(action1)
+        XCTAssertNotNil(action1)
         XCTAssertEqual(action1?.assignee, "Олексій")
         XCTAssertEqual(action1?.isCompleted, false)
         
         // "Написати юніт-тести для інтеграційного потоку" -> assignee: nil, isCompleted: false
         let action2 = sortedActions.first(where: { $0.text.contains("юніт-тести") })
-        XCTNotNil(action2)
+        XCTAssertNotNil(action2)
         XCTAssertNil(action2?.assignee)
         XCTAssertEqual(action2?.isCompleted, false)
         
         // "Підготувати презентацію для замовника" -> assignee: "Марія", isCompleted: true
         let action3 = sortedActions.first(where: { $0.text.contains("презентацію") })
-        XCTNotNil(action3)
+        XCTAssertNotNil(action3)
         XCTAssertEqual(action3?.assignee, "Марія")
         XCTAssertEqual(action3?.isCompleted, true)
         
