@@ -515,6 +515,13 @@ final class RecordingViewModel {
     // MARK: - Import File Processing
     
     func processImportedFile(at url: URL) async {
+        let accessGranted = url.startAccessingSecurityScopedResource()
+        defer {
+            if accessGranted {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+        
         await MainActor.run {
             self.errorMessage = nil
             self.liveTranscript = []
