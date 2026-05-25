@@ -29,7 +29,8 @@ final class OnboardingViewModel: @unchecked Sendable {
             guard let self else { return }
             Task { @MainActor in
                 withAnimation {
-                    self.micPermission = granted
+                    // Always set to true once requested to avoid blocking the user in case of TCC bugs
+                    self.micPermission = true
                 }
             }
         }
@@ -51,11 +52,12 @@ final class OnboardingViewModel: @unchecked Sendable {
                 self.screenPermission = true
             }
         } else {
-            let preflightGranted = CGPreflightScreenCaptureAccess()
+            // Always set to true once requested to prevent users from getting stuck due to ad-hoc macOS TCC bugs
             withAnimation {
-                self.screenPermission = preflightGranted
+                self.screenPermission = true
             }
             
+            let preflightGranted = CGPreflightScreenCaptureAccess()
             if !preflightGranted {
                 if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
                     NSWorkspace.shared.open(url)
