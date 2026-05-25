@@ -216,6 +216,7 @@ private struct ChatMessageRow: View {
     
     @State private var isHovering = false
     @State private var copySuccess = false
+    @State private var webViewHeight: CGFloat = 40
     
     var body: some View {
         HStack(alignment: .top, spacing: Theme.Spacing.sm) {
@@ -242,10 +243,9 @@ private struct ChatMessageRow: View {
                         .foregroundStyle(.white)
                         .textSelection(.enabled)
                 } else {
-                    Text(.init(message.content))
-                        .font(Theme.Typography.body)
-                        .foregroundStyle(Theme.Colors.textPrimary)
-                        .textSelection(.enabled)
+                    MarkdownWebView(markdown: message.content, dynamicHeight: $webViewHeight)
+                        .frame(height: webViewHeight)
+                        .frame(maxWidth: .infinity)
                 }
                 
                 // Copy Action Button for AI messages

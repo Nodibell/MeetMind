@@ -10,6 +10,46 @@ import WebKit
 
 struct MarkdownWebView: NSViewRepresentable {
     let markdown: String
+    var dynamicHeight: Binding<CGFloat>? = nil
+    
+    class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+        var parent: MarkdownWebView
+        
+        init(_ parent: MarkdownWebView) {
+            self.parent = parent
+        }
+        
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard message.name == "heightHandler",
+                  let height = message.body as? CGFloat else { return }
+            
+            DispatchQueue.main.async {
+                let currentHeight = self.parent.dynamicHeight?.wrappedValue ?? 0
+                let newHeight = max(height, 40)
+                if abs(currentHeight - newHeight) > 2 {
+                    self.parent.dynamicHeight?.wrappedValue = newHeight
+                }
+            }
+        }
+        
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            webView.evaluateJavaScript("document.documentElement.scrollHeight || document.body.scrollHeight") { [weak self] result, error in
+                if let height = result as? CGFloat {
+                    DispatchQueue.main.async {
+                        let currentHeight = self?.parent.dynamicHeight?.wrappedValue ?? 0
+                        let newHeight = max(height, 40)
+                        if abs(currentHeight - newHeight) > 2 {
+                            self?.parent.dynamicHeight?.wrappedValue = newHeight
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
     
     func makeNSView(context: Context) -> WKWebView {
         let preferences = WKWebpagePreferences()
@@ -18,13 +58,21 @@ struct MarkdownWebView: NSViewRepresentable {
         let config = WKWebViewConfiguration()
         config.defaultWebpagePreferences = preferences
         
+        if dynamicHeight != nil {
+            let controller = WKUserContentController()
+            controller.add(context.coordinator, name: "heightHandler")
+            config.userContentController = controller
+        }
+        
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.setValue(false, forKey: "drawsBackground") // Transparent background
+        webView.navigationDelegate = context.coordinator
         
         return webView
     }
     
     func updateNSView(_ webView: WKWebView, context: Context) {
+        context.coordinator.parent = self
         let html = generateHTML(from: markdown)
         webView.loadHTMLString(html, baseURL: nil)
     }
@@ -219,7 +267,24 @@ struct MarkdownWebView: NSViewRepresentable {
                         ],
                         throwOnError : false
                     });
+                    sendHeight();
                 });
+
+                function sendHeight() {
+                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.heightHandler) {
+                        setTimeout(function() {
+                            var height = document.documentElement.scrollHeight || document.body.scrollHeight;
+                            window.webkit.messageHandlers.heightHandler.postMessage(height);
+                        }, 50);
+                    }
+                }
+                
+                window.onload = sendHeight;
+                
+                if (window.ResizeObserver) {
+                    const resizeObserver = new ResizeObserver(sendHeight);
+                    resizeObserver.observe(document.body);
+                }
             </script>
         </body>
         </html>
