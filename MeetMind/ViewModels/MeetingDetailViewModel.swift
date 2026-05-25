@@ -335,6 +335,10 @@ final class MeetingDetailViewModel {
                     url = Constants.summariesDirectory.appendingPathComponent(filename)
                 }
                 try? newSummary.write(to: url, atomically: true, encoding: .utf8)
+                
+                await MainActor.run {
+                    try? self.repository?.syncStructuredEntities(for: self.meeting)
+                }
             } catch {
                 await MainActor.run {
                     if !Task.isCancelled {
