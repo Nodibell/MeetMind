@@ -106,7 +106,7 @@ final class Meeting {
     var displayDuration: String {
         duration.formattedDuration
     }
-    
+
     var filenameBase: String {
         "\(date.filenameDateFormatted) - \(title.filenameSafe) - \(id.uuidString.prefix(6))"
     }
@@ -114,19 +114,20 @@ final class Meeting {
 
 // MARK: - Structured Entities Sync Extension
 extension Meeting {
-    /// Synchronizes SwiftData entities from associated transcripts and summaries
+    /// - Warning: Deprecated. Use `MeetingRepository.syncStructuredEntities(for:)` instead.
+    ///   This method mixes persistence concerns with the domain model.
+    ///   Retained for backward compatibility only.
+    @available(*, deprecated, message: "Use MeetingRepository.syncStructuredEntities(for:) instead.")
     func syncStructuredEntities(modelContext: ModelContext) {
+        let parser = ParseSummaryUseCase()
+
         // 1. Sync TranscriptSegments from JSON file
         if let url = transcriptURL,
            let doc = try? MeetingTranscriptDocument.load(from: url) {
-            
-            // Remove existing segments
-            for segment in transcriptSegments {
-                modelContext.delete(segment)
-            }
+
+            for segment in transcriptSegments { modelContext.delete(segment) }
             transcriptSegments.removeAll()
-            
-            // Add new segments
+
             for seg in doc.segments {
                 let segment = TranscriptSegment(
                     id: seg.id,
@@ -141,82 +142,31 @@ extension Meeting {
                 transcriptSegments.append(segment)
             }
         }
-        
-        // 2. Sync ActionItems and Decisions from summary markdown file
+
+        // 2. Sync ActionItems and Decisions from summary markdown
         if let url = summaryURL,
-           let summary = try? String(contentsOf: url, encoding: .utf8) {
-            
-            // Remove existing action items and decisions
-            for item in actionItems {
-                modelContext.delete(item)
-            }
+           let markdown = try? String(contentsOf: url, encoding: .utf8) {
+
+            for item in actionItems { modelContext.delete(item) }
             actionItems.removeAll()
-            
-            for dec in decisions {
-                modelContext.delete(dec)
-            }
+            for dec in decisions { modelContext.delete(dec) }
             decisions.removeAll()
-            
-            let lines = summary.components(separatedBy: CharacterSet.newlines)
-            var inDecisionsSection = false
-            
-            for line in lines {
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-                
-                // Track section headers
-                if trimmed.localizedCaseInsensitiveContains("рішення") || trimmed.localizedCaseInsensitiveContains("decisions") {
-                    inDecisionsSection = true
-                    continue
-                } else if trimmed.hasPrefix("#") {
-                    inDecisionsSection = false
-                }
-                
-                // Parse Action Items: - [ ] or - [x]
-                if trimmed.hasPrefix("- [ ]") || trimmed.hasPrefix("- [x]") {
-                    let isDone = trimmed.hasPrefix("- [x]")
-                    var text = trimmed.replacingOccurrences(of: "- [ ]", with: "")
-                                      .replacingOccurrences(of: "- [x]", with: "")
-                                      .trimmingCharacters(in: CharacterSet.whitespaces)
-                    
-                    // Extract assignee
-                    var assignee: String? = nil
-                    let regexAssignee = try? NSRegularExpression(pattern: #"\(([^)]+)\)$|@(\w+)$"#, options: [])
-                    if let match = regexAssignee?.firstMatch(in: text, options: [], range: NSRange(text.startIndex..., in: text)) {
-                        if let range = Range(match.range(at: 1), in: text) ?? Range(match.range(at: 2), in: text) {
-                            assignee = String(text[range])
-                            text = text.replacingCharacters(in: Range(match.range, in: text)!, with: "").trimmingCharacters(in: CharacterSet.whitespaces)
-                        }
-                    }
-                    
-                    if !text.isEmpty {
-                        let action = ActionItem(
-                            id: UUID(),
-                            text: text,
-                            dueDate: nil,
-                            isCompleted: isDone,
-                            assignee: assignee
-                        )
-                        action.meeting = self
-                        actionItems.append(action)
-                    }
-                }
-                // Parse Decisions: if inside decisions section and starts with bullet point
-                else if inDecisionsSection && (trimmed.hasPrefix("-") || trimmed.hasPrefix("*") || trimmed.hasPrefix("•")) {
-                    let text = trimmed.trimmingCharacters(in: CharacterSet(charactersIn: "-*• ")).trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !text.isEmpty {
-                        let decision = Decision(
-                            id: UUID(),
-                            text: text,
-                            context: nil
-                        )
-                        decision.meeting = self
-                        decisions.append(decision)
-                    }
-                }
+
+            for dto in parser.extractActionItems(from: markdown) {
+                let action = ActionItem(
+                    id: UUID(), text: dto.text, dueDate: nil,
+                    isCompleted: dto.isCompleted, assignee: dto.assignee
+                )
+                action.meeting = self
+                actionItems.append(action)
+            }
+            for dto in parser.extractDecisions(from: markdown) {
+                let decision = Decision(id: UUID(), text: dto.text, context: nil)
+                decision.meeting = self
+                decisions.append(decision)
             }
         }
-        
+
         try? modelContext.save()
     }
 }
-

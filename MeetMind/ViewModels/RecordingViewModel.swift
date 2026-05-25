@@ -50,6 +50,8 @@ final class RecordingViewModel {
     private var liveTranscriptionTask: Task<Void, Never>?
     private(set) var currentMeeting: Meeting?
     private var modelContext: ModelContext?
+    private var repository: MeetingRepository?
+    private let exportUseCase = ExportMeetingUseCase()
 
     // MARK: - Init
     init(
@@ -67,6 +69,7 @@ final class RecordingViewModel {
 
     func setModelContext(_ context: ModelContext) {
         self.modelContext = context
+        self.repository = MeetingRepository(context: context)
     }
 
     func refreshSystemAudioSources() {
@@ -148,8 +151,7 @@ final class RecordingViewModel {
                     let meeting = Meeting(title: self.meetingTitle)
                     meeting.audioFilename = url.lastPathComponent
                     self.currentMeeting = meeting
-                    self.modelContext?.insert(meeting)
-                    try? self.modelContext?.save()
+                    try? self.repository?.insert(meeting)
 
                     // Show always-on-top indicator with full controls
                     FloatingIndicatorManager.shared.show(
@@ -247,7 +249,7 @@ final class RecordingViewModel {
         // Update meeting
         currentMeeting?.title = meetingTitle
         currentMeeting?.duration = audioManager.elapsedTime
-        try? modelContext?.save()
+        repository?.trySave()
 
         // Start post-processing
         Task {
@@ -345,7 +347,7 @@ final class RecordingViewModel {
                 .appendingPathComponent("\(currentMeeting?.filenameBase ?? "transcript").\(Constants.transcriptFileExtension)")
             try document.save(to: transcriptURL)
             currentMeeting?.transcriptFilename = transcriptURL.lastPathComponent
-            try? modelContext?.save()
+            repository?.trySave()
 
         } catch {
             await MainActor.run {
@@ -452,12 +454,12 @@ final class RecordingViewModel {
 
         // Complete
         await MainActor.run {
-            if let context = self.modelContext {
-                self.currentMeeting?.syncStructuredEntities(modelContext: context)
+            if let meeting = self.currentMeeting {
+                try? self.repository?.syncStructuredEntities(for: meeting)
             }
             currentMeeting?.status = .complete
-            try? modelContext?.save()
-            
+            repository?.trySave()
+
             // Wait a tiny bit for DB consistency
             self.completedMeetingID = currentMeeting?.id
             state = .complete
@@ -472,31 +474,18 @@ final class RecordingViewModel {
     // MARK: - Obsidian Export
 
     func exportToObsidian() {
-        guard let vaultURL = AppSettings.shared.obsidianVaultPath else {
-            errorMessage = "Шлях до Obsidian vault не налаштовано. Вкажіть його в Налаштуваннях."
-            return
-        }
-
-        let transcriptText = fullTranscript?.formattedText
-            ?? liveTranscript.map { "[\($0.startTime.formattedTimestamp)] \($0.text)" }.joined(separator: "\n")
-
-        let data = MeetingSummaryData(
-            title: meetingTitle,
-            date: currentMeeting?.date ?? Date(),
-            duration: currentMeeting?.duration ?? 0,
-            language: fullTranscript?.language ?? Constants.defaultLanguage,
-            tags: currentMeeting?.tags ?? ["meeting"],
-            transcript: transcriptText,
-            summary: summary.isEmpty ? nil : summary
-        )
-
+        guard let meeting = currentMeeting else { return }
         do {
-            let exportedURL = try ObsidianExporter.export(meeting: data, to: vaultURL)
-            currentMeeting?.isExportedToObsidian = true
-            try? modelContext?.save()
-            AppLogger.info("Exported to: \(exportedURL.path)")
+            let url = try exportUseCase.execute(
+                meeting: meeting,
+                transcript: fullTranscript,
+                summary: summary
+            )
+            meeting.isExportedToObsidian = true
+            repository?.trySave()
+            AppLogger.info("Exported to: \(url.path)")
         } catch {
-            errorMessage = "Помилка експорту в Obsidian: \(error.localizedDescription)"
+            errorMessage = error.localizedDescription
         }
     }
 

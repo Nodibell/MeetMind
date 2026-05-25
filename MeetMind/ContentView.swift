@@ -8,62 +8,37 @@
 import SwiftUI
 import SwiftData
 
-/// Main app view — NavigationSplitView with meeting list sidebar and detail content
+/// Main app view — NavigationSplitView with meeting list sidebar and detail content.
+/// Navigation state is owned by `AppRouter`; this view is responsible only for layout.
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
-    
+
     // Services (injected from app)
     let audioManager: any AudioProvider
     let transcriptionService: any TranscriptionProvider
     let llmService: any LLMProvider
-    
-    // State
-    @State private var selectedMeetingID: UUID?
-    @State private var isShowingGlobalSearch = false
-    @State private var isShowingActionItems = false
-    @State private var isShowingRecording = true
-    @State private var isShowingOnboarding = false
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
-    @State private var dbErrorPresented = false
-    
+
+    // DB diagnostic state (passed from PersistenceController via MeetMindApp)
+    let dbError: String?
+    let dbBackupCreated: Bool
+
+    // Navigation
+    @State private var router = AppRouter()
+
     // ViewModels
     @State private var recordingVM: RecordingViewModel?
     @State private var meetingListVM = MeetingListViewModel()
-    
+
+    // UI state
+    @State private var dbErrorDismissed = false
+    @State private var isShowingOnboarding = false
+
+    // MARK: - Body
+
     var body: some View {
         VStack(spacing: 0) {
-            if dbErrorPresented, let dbError = MeetMindApp.dbInitializationError {
-                HStack(spacing: Theme.Spacing.md) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.title2)
-                        .foregroundStyle(.yellow)
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Базу даних було відновлено (скинуто)")
-                            .font(.headline)
-                            .foregroundStyle(Theme.Colors.textPrimary)
-                        Text("Попередній файл бази даних містив помилки міграції. Створено резервну копію в папці Backups: \(dbError)")
-                            .font(.caption)
-                            .foregroundStyle(Theme.Colors.textSecondary)
-                    }
-                    
-                    Spacer()
-                    
-                    Button("Зрозуміло") {
-                        withAnimation {
-                            dbErrorPresented = false
-                            MeetMindApp.dbInitializationError = nil
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-                .padding()
-                .background(Color.yellow.opacity(0.1))
-                .overlay(Rectangle().stroke(Color.yellow.opacity(0.3), lineWidth: 1))
-                .transition(.move(edge: .top))
-            }
-            
-            NavigationSplitView(columnVisibility: $columnVisibility) {
+            dbBanner
+            NavigationSplitView(columnVisibility: $router.columnVisibility) {
                 sidebar
                     .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
             } detail: {
@@ -74,13 +49,9 @@ struct ContentView: View {
         .onAppear {
             setupViewModels()
             checkFirstRun()
-            dbErrorPresented = MeetMindApp.dbInitializationError != nil
         }
         .onReceive(NotificationCenter.default.publisher(for: .startNewRecording)) { _ in
-            isShowingGlobalSearch = false
-            isShowingActionItems = false
-            isShowingRecording = true
-            selectedMeetingID = nil
+            router.startNewRecording()
             recordingVM?.resetForNewRecording()
         }
         .sheet(isPresented: $isShowingOnboarding) {
@@ -89,95 +60,110 @@ struct ContentView: View {
                 UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
             }
         }
-        .onChange(of: selectedMeetingID) { oldID, newID in
-            if newID == UUID.globalSearch {
-                isShowingGlobalSearch = true
-                isShowingActionItems = false
-                isShowingRecording = false
-            } else if newID == UUID.actionItems {
-                isShowingGlobalSearch = false
-                isShowingActionItems = true
-                isShowingRecording = false
-            } else if newID != nil {
-                isShowingGlobalSearch = false
-                isShowingActionItems = false
-                isShowingRecording = false
+    }
+
+    // MARK: - DB Error Banner
+
+    @ViewBuilder
+    private var dbBanner: some View {
+        if let error = dbError, !dbErrorDismissed {
+            HStack(spacing: Theme.Spacing.md) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.title2)
+                    .foregroundStyle(.yellow)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Базу даних було відновлено (скинуто)")
+                        .font(.headline)
+                        .foregroundStyle(Theme.Colors.textPrimary)
+                    Text(dbBackupCreated
+                         ? "Попередній файл містив помилки міграції. Резервну копію збережено в папці Backups. (\(error))"
+                         : "Виникла помилка бази даних. (\(error))")
+                        .font(.caption)
+                        .foregroundStyle(Theme.Colors.textSecondary)
+                }
+
+                Spacer()
+
+                Button("Зрозуміло") {
+                    withAnimation { dbErrorDismissed = true }
+                }
+                .buttonStyle(.borderedProminent)
             }
+            .padding()
+            .background(Color.yellow.opacity(0.1))
+            .overlay(Rectangle().stroke(Color.yellow.opacity(0.3), lineWidth: 1))
+            .transition(.move(edge: .top))
         }
     }
-    
+
     // MARK: - Sidebar
-    
+
     private var sidebar: some View {
         MeetingListView(
-            selectedMeetingID: $selectedMeetingID,
+            selectedMeetingID: Binding(
+                get: { router.selectedMeetingID },
+                set: { id in
+                    guard let id else { return }
+                    switch id {
+                    case .globalSearch: router.navigate(to: .globalSearch)
+                    case .actionItems:  router.navigate(to: .actionItems)
+                    default:            router.navigate(to: .meeting(id))
+                    }
+                }
+            ),
             viewModel: meetingListVM,
             onNewRecording: {
-                isShowingGlobalSearch = false
-                isShowingActionItems = false
-                isShowingRecording = true
-                selectedMeetingID = nil
+                router.startNewRecording()
                 recordingVM?.resetForNewRecording()
             }
         )
     }
-    
+
     // MARK: - Detail Content
-    
+
     @ViewBuilder
     private var detailContent: some View {
-        if isShowingGlobalSearch {
+        switch router.current {
+        case .globalSearch:
             GlobalSearchView(llmService: llmService)
-        } else if isShowingActionItems {
+
+        case .actionItems:
             ActionItemsView()
-        } else if isShowingRecording && selectedMeetingID == nil {
-            // Show recording view
-            if let vm = recordingVM {
-                RecordingView(viewModel: vm)
-                    .onChange(of: vm.state) { oldState, newState in
-                        if case .complete = newState {
-                            if let meetingID = vm.completedMeetingID {
-                                selectedMeetingID = meetingID
-                                isShowingRecording = false
-                            }
-                        }
-                    }
-            } else {
-                ProgressView("Ініціалізація...")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Theme.Colors.backgroundPrimary)
-            }
-        } else if let meetingID = selectedMeetingID {
-            // Check if this meeting is currently being recorded
-            if isShowingRecording || (recordingVM?.state == .recording && recordingVM?.currentMeeting?.id == meetingID) {
-                if let vm = recordingVM {
-                    RecordingView(viewModel: vm)
-                } else {
-                    MeetingDetailForID(
-                        meetingID: meetingID,
-                        llmService: llmService
-                    )
-                }
-            } else {
-                // Show meeting detail
-                MeetingDetailForID(
-                    meetingID: meetingID,
-                    llmService: llmService
-                )
-            }
-        } else {
-            // Empty state
+
+        case .recording:
+            recordingDetail
+
+        case .meeting(let id):
+            MeetingDetailForID(meetingID: id, llmService: llmService)
+
+        case .welcome:
             welcomeView
         }
     }
-    
+
+    @ViewBuilder
+    private var recordingDetail: some View {
+        if let vm = recordingVM {
+            RecordingView(viewModel: vm)
+                .onChange(of: vm.state) { _, newState in
+                    if case .complete = newState, let meetingID = vm.completedMeetingID {
+                        router.navigateAfterRecordingComplete(meetingID: meetingID)
+                    }
+                }
+        } else {
+            ProgressView("Ініціалізація...")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Theme.Colors.backgroundPrimary)
+        }
+    }
+
     // MARK: - Welcome View
-    
+
     private var welcomeView: some View {
         VStack(spacing: Theme.Spacing.xxl) {
             Spacer()
-            
-            // App icon placeholder
+
             ZStack {
                 Circle()
                     .fill(
@@ -191,35 +177,34 @@ struct ContentView: View {
                         )
                     )
                     .frame(width: 100, height: 100)
-                
+
                 Image(systemName: "waveform.circle.fill")
                     .font(.system(size: 50))
                     .foregroundStyle(Theme.Gradients.accent)
             }
-            
+
             VStack(spacing: Theme.Spacing.sm) {
                 Text("MeetMind")
                     .font(Theme.Typography.largeTitle)
                     .foregroundStyle(Theme.Colors.textPrimary)
-                
+
                 Text("AI-помічник для нарад")
                     .font(Theme.Typography.body)
                     .foregroundStyle(Theme.Colors.textSecondary)
             }
-            
+
             VStack(spacing: Theme.Spacing.md) {
-                featureRow(icon: "mic.fill", title: "Запис аудіо", subtitle: "Мікрофон або системне аудіо")
-                featureRow(icon: "text.quote", title: "Транскрипція", subtitle: "WhisperKit — українська мова")
-                featureRow(icon: "brain.head.profile", title: "AI Аналіз", subtitle: "Ollama — резюме та завдання")
-                featureRow(icon: "doc.text", title: "Obsidian", subtitle: "Автоматичний експорт нотаток")
+                featureRow(icon: "mic.fill",            title: "Запис аудіо",    subtitle: "Мікрофон або системне аудіо")
+                featureRow(icon: "text.quote",          title: "Транскрипція",   subtitle: "WhisperKit — українська мова")
+                featureRow(icon: "brain.head.profile",  title: "AI Аналіз",      subtitle: "Ollama — резюме та завдання")
+                featureRow(icon: "doc.text",            title: "Obsidian",       subtitle: "Автоматичний експорт нотаток")
             }
             .frame(maxWidth: 320)
-            
-            Button(action: {
-                isShowingRecording = true
-                selectedMeetingID = nil
+
+            Button {
+                router.startNewRecording()
                 recordingVM?.resetForNewRecording()
-            }) {
+            } label: {
                 HStack(spacing: Theme.Spacing.sm) {
                     Image(systemName: "mic.fill")
                     Text("Почати запис")
@@ -233,13 +218,13 @@ struct ContentView: View {
                 .shadow(color: Theme.Colors.accentPrimary.opacity(0.3), radius: 12, y: 4)
             }
             .buttonStyle(.plain)
-            
+
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.Colors.backgroundPrimary)
     }
-    
+
     private func featureRow(icon: String, title: LocalizedStringKey, subtitle: LocalizedStringKey) -> some View {
         HStack(spacing: Theme.Spacing.md) {
             Image(systemName: icon)
@@ -248,28 +233,26 @@ struct ContentView: View {
                 .frame(width: 32, height: 32)
                 .background(Theme.Colors.accentPrimary.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: Theme.CornerRadius.sm))
-            
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(Theme.Typography.bodyMedium)
                     .foregroundStyle(Theme.Colors.textPrimary)
-                
+
                 Text(subtitle)
                     .font(Theme.Typography.footnote)
                     .foregroundStyle(Theme.Colors.textTertiary)
             }
-            
+
             Spacer()
         }
     }
-    
+
     // MARK: - Setup
-    
+
     private func checkFirstRun() {
-        let hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
-        if !hasCompletedOnboarding {
-            isShowingOnboarding = true
-        }
+        guard !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") else { return }
+        isShowingOnboarding = true
     }
 
     private func setupViewModels() {
@@ -291,25 +274,25 @@ struct ContentView: View {
 struct MeetingDetailForID: View {
     let meetingID: UUID
     let llmService: any LLMProvider
-    
+
     @Environment(\.modelContext) private var modelContext
     @Query private var meetings: [Meeting]
-    
+
     @State private var detailVM: MeetingDetailViewModel?
-    
+
     init(meetingID: UUID, llmService: any LLMProvider) {
         self.meetingID = meetingID
         self.llmService = llmService
-        
+
         let predicate = #Predicate<Meeting> { $0.id == meetingID }
         _meetings = Query(filter: predicate)
     }
-    
+
     var body: some View {
         Group {
             if let meeting = meetings.first ?? findMeetingDirectly() {
                 MeetingDetailViewWrapper(meeting: meeting, llmService: llmService)
-                    .id(meeting.id) // Force redraw on ID change
+                    .id(meeting.id)
             } else {
                 VStack(spacing: Theme.Spacing.md) {
                     ProgressView()
@@ -323,7 +306,7 @@ struct MeetingDetailForID: View {
             }
         }
     }
-    
+
     private func findMeetingDirectly() -> Meeting? {
         let descriptor = FetchDescriptor<Meeting>(predicate: #Predicate { $0.id == meetingID })
         return try? modelContext.fetch(descriptor).first
@@ -333,9 +316,10 @@ struct MeetingDetailForID: View {
 struct MeetingDetailViewWrapper: View {
     let meeting: Meeting
     let llmService: any LLMProvider
+
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: MeetingDetailViewModel?
-    
+
     var body: some View {
         Group {
             if let vm = viewModel {

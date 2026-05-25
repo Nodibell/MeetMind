@@ -84,44 +84,28 @@ struct ActionItemsView: View {
     }
     
     private var filteredItems: [ActionItemUI] {
-        if hideCompleted {
-            return actionItems.filter { !$0.isCompleted }
-        }
-        return actionItems
+        hideCompleted ? actionItems.filter { !$0.isCompleted } : actionItems
     }
     
     private func deleteTask(_ item: ActionItemUI) {
-        // Find the meeting
         guard let meeting = meetings.first(where: { $0.id == item.meetingID }) else { return }
+        let repo = MeetingRepository(context: modelContext)
         
         // 1. Delete from database
         if let dbItem = meeting.actionItems.first(where: { $0.id == item.id }) {
             modelContext.delete(dbItem)
-            try? modelContext.save()
+            repo.trySave()
         }
         
         // 2. Delete from markdown file
         if let url = meeting.summaryURL {
             do {
                 let summary = try String(contentsOf: url, encoding: .utf8)
-                
-                let lines = summary.components(separatedBy: CharacterSet.newlines)
-                var newLines: [String] = []
-                var found = false
-                
                 let targetCheck = item.isCompleted ? "- [x]" : "- [ ]"
-                
-                for line in lines {
-                    if !found && line.contains(targetCheck) && line.contains(item.text) {
-                        found = true
-                        // Skip this line
-                    } else {
-                        newLines.append(line)
-                    }
-                }
-                
-                let newSummary = newLines.joined(separator: "\n")
-                try newSummary.write(to: url, atomically: true, encoding: .utf8)
+                let newLines = summary
+                    .components(separatedBy: CharacterSet.newlines)
+                    .filter { !($0.contains(targetCheck) && $0.contains(item.text)) }
+                try newLines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
                 
             } catch {
                 AppLogger.error("Failed to delete task in markdown file", error: error)
@@ -134,11 +118,12 @@ struct ActionItemsView: View {
     
     private func loadActionItems() {
         isLoading = true
+        let repo = MeetingRepository(context: modelContext)
         var items: [ActionItemUI] = []
         
         for meeting in meetings {
-            // First sync to make sure we're up to date
-            meeting.syncStructuredEntities(modelContext: modelContext)
+            // Sync structured entities via repository (uses ParseSummaryUseCase internally)
+            try? repo.syncStructuredEntities(for: meeting)
             
             for item in meeting.actionItems {
                 items.append(ActionItemUI(

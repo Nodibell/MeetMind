@@ -36,6 +36,8 @@ final class MeetingDetailViewModel {
     // MARK: - Services
     private let llmService: any LLMProvider
     private var modelContext: ModelContext?
+    private var repository: MeetingRepository?
+    private let exportUseCase = ExportMeetingUseCase()
     private var summaryTask: Task<Void, Never>?
     
     // MARK: - Computed
@@ -57,6 +59,7 @@ final class MeetingDetailViewModel {
     
     func setModelContext(_ context: ModelContext) {
         self.modelContext = context
+        self.repository = MeetingRepository(context: context)
     }
     
     // MARK: - Load Data
@@ -64,18 +67,18 @@ final class MeetingDetailViewModel {
     func loadData() async {
         await loadTranscript()
         await loadSummary()
-        
-        if let context = modelContext {
+
+        if let repository {
             await MainActor.run {
-                self.meeting.syncStructuredEntities(modelContext: context)
+                try? repository.syncStructuredEntities(for: self.meeting)
             }
         }
-        
+
         // Auto-detect names if not already set
         if meeting.speakerMetadata.allSatisfy({ $0.name == nil }) {
             await autoDetectSpeakerNames()
         }
-        
+
         // Auto-detect title if still default
         if meeting.title == "Нова нарада" || meeting.title.isEmpty {
             await autoDetectTitle()
@@ -84,14 +87,14 @@ final class MeetingDetailViewModel {
     
     private func autoDetectTitle() async {
         guard let transcriptText = transcript?.fullText, !transcriptText.isEmpty else { return }
-        
+
         do {
             let newTitle = try await llmService.generateTitle(transcript: transcriptText)
             if !newTitle.isEmpty {
                 await MainActor.run {
                     self.meetingTitle = newTitle
                     self.meeting.title = newTitle
-                    try? self.modelContext?.save()
+                    self.repository?.trySave()
                 }
             }
         } catch {
@@ -351,36 +354,24 @@ final class MeetingDetailViewModel {
     }
     
     // MARK: - Export
-    
+
     func exportToObsidian() {
-        guard let vaultURL = AppSettings.shared.obsidianVaultPath else {
-            errorMessage = "Шлях до Obsidian vault не налаштовано"
-            return
-        }
-        
-        let data = MeetingSummaryData(
-            title: meeting.title,
-            date: meeting.date,
-            duration: meeting.duration,
-            language: transcript?.language ?? meeting.language,
-            tags: meeting.tags.isEmpty ? ["meeting"] : meeting.tags,
-            transcript: transcript?.formattedText,
-            summary: summary.isEmpty ? nil : summary
-        )
-        
         do {
-            let _ = try ObsidianExporter.export(meeting: data, to: vaultURL)
+            try exportUseCase.execute(
+                meeting: meeting,
+                transcript: transcript,
+                summary: summary
+            )
             meeting.isExportedToObsidian = true
-            try? modelContext?.save()
+            repository?.trySave()
             exportSuccess = true
-            
-            // Auto-dismiss success
+
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(3))
                 self.exportSuccess = false
             }
         } catch {
-            errorMessage = "Помилка експорту: \(error.localizedDescription)"
+            errorMessage = error.localizedDescription
         }
     }
     
@@ -405,7 +396,7 @@ final class MeetingDetailViewModel {
         }
         meeting.title = trimmed
         meetingTitle = trimmed
-        try? modelContext?.save()
+        repository?.trySave()
         AppLogger.info("Meeting title changed to: \(trimmed)")
     }
     
@@ -415,12 +406,12 @@ final class MeetingDetailViewModel {
         let cleaned = tag.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty, !meeting.tags.contains(cleaned) else { return }
         meeting.tags.append(cleaned)
-        try? modelContext?.save()
+        repository?.trySave()
     }
-    
+
     func removeTag(_ tag: String) {
         meeting.tags.removeAll { $0 == tag }
-        try? modelContext?.save()
+        repository?.trySave()
     }
     
     // MARK: - Speaker Management
@@ -431,9 +422,9 @@ final class MeetingDetailViewModel {
         } else {
             meeting.speakerMetadata.append(SpeakerMetadata(id: id, name: newName, colorHex: nil))
         }
-        try? modelContext?.save()
+        repository?.trySave()
     }
-    
+
     func updateSpeakerColor(id: String, color: Color) {
         let hex = color.toHex()
         if let index = meeting.speakerMetadata.firstIndex(where: { $0.id == id }) {
@@ -441,7 +432,7 @@ final class MeetingDetailViewModel {
         } else {
             meeting.speakerMetadata.append(SpeakerMetadata(id: id, name: nil, colorHex: hex))
         }
-        try? modelContext?.save()
+        repository?.trySave()
     }
     
     func autoDetectSpeakerNames() async {
