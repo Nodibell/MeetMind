@@ -19,8 +19,12 @@ final class OnboardingViewModel: @unchecked Sendable {
     
     @MainActor
     func updatePermissionStates() {
-        self.micPermission = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
-        self.screenPermission = CGPreflightScreenCaptureAccess()
+        if AVCaptureDevice.authorizationStatus(for: .audio) == .authorized {
+            self.micPermission = true
+        }
+        if CGPreflightScreenCaptureAccess() {
+            self.screenPermission = true
+        }
     }
     
     @MainActor
@@ -146,23 +150,36 @@ struct OnboardingView: View {
     }
     
     var body: some View {
-        VStack(spacing: 30) {
-            header
-            
-            ZStack {
-                if viewModel.currentStep == 0 {
-                    permissionsStep
-                } else if viewModel.currentStep == 1 {
-                    modelSetupStep
-                } else {
-                    completionStep
+        ZStack(alignment: .topTrailing) {
+            VStack(spacing: 30) {
+                header
+                
+                ZStack {
+                    if viewModel.currentStep == 0 {
+                        permissionsStep
+                    } else if viewModel.currentStep == 1 {
+                        modelSetupStep
+                    } else {
+                        completionStep
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                
+                footer
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(40)
             
-            footer
+            Button(action: {
+                NSApp.terminate(nil)
+            }) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 20))
+                    .foregroundColor(Color.secondary.opacity(0.7))
+                    .padding(16)
+            }
+            .buttonStyle(.plain)
+            .help("Вийти з додатка")
         }
-        .padding(40)
         .frame(width: 650, height: 490)
         .background(Theme.Colors.backgroundPrimary)
         .onAppear {
