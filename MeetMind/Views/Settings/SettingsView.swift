@@ -131,7 +131,7 @@ struct SettingsView: View {
                 }
 
                 Button("Оновити список джерел") {
-                    viewModel.refreshSystemAudioSources()
+                    viewModel.refreshSystemAudioSources(forcePrompt: true)
                 }
 
                 Text("Для режимів Система та Мікс можна вибрати весь екран або конкретне вікно")
@@ -142,7 +142,7 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .padding()
         .task {
-            viewModel.refreshSystemAudioSources()
+            viewModel.refreshSystemAudioSources(forcePrompt: false)
         }
     }
 

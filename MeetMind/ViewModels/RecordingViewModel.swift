@@ -7,6 +7,8 @@
 
 import Foundation
 import SwiftData
+import CoreGraphics
+import AppKit
 
 /// Manages the recording flow: idle → recording → transcribing → summarizing → complete
 @Observable
@@ -64,7 +66,9 @@ final class RecordingViewModel {
         self.llmService = llmService
 
         setupCallbacks()
-        refreshSystemAudioSources()
+        if UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
+            refreshSystemAudioSources(forcePrompt: false)
+        }
     }
 
     func setModelContext(_ context: ModelContext) {
@@ -72,7 +76,24 @@ final class RecordingViewModel {
         self.repository = MeetingRepository(context: context)
     }
 
-    func refreshSystemAudioSources() {
+    func refreshSystemAudioSources(forcePrompt: Bool = false) {
+        if forcePrompt {
+            let alreadyGranted = CGPreflightScreenCaptureAccess()
+            if !alreadyGranted {
+                let granted = CGRequestScreenCaptureAccess()
+                if !granted && !CGPreflightScreenCaptureAccess() {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+            }
+        }
+        
+        guard CGPreflightScreenCaptureAccess() else {
+            AppLogger.warning("Screen Recording permission not granted. Skipping system audio sources query.")
+            return
+        }
+
         Task {
             do {
                 let sources = try await audioManager.getAvailableSystemAudioSources()

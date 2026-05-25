@@ -58,6 +58,7 @@ struct ContentView: View {
             OnboardingView(transcriptionService: transcriptionService) {
                 isShowingOnboarding = false
                 UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+                recordingVM?.refreshSystemAudioSources(forcePrompt: false)
             }
         }
     }

@@ -216,7 +216,7 @@ struct RecordingControlsView: View {
             .frame(maxWidth: 190)
 
             // Manual refresh button
-            Button(action: { viewModel.refreshSystemAudioSources() }) {
+            Button(action: { viewModel.refreshSystemAudioSources(forcePrompt: true) }) {
                 Image(systemName: "arrow.clockwise")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(Theme.Colors.textTertiary)
@@ -315,7 +315,7 @@ struct RecordingControlsView: View {
             withAnimation(.interactiveSpring(response: 0.25, dampingFraction: 0.75)) {
                 viewModel.audioManager.audioSource = source
                 if source == .system || source == .mixed {
-                    viewModel.refreshSystemAudioSources()
+                    viewModel.refreshSystemAudioSources(forcePrompt: true)
                 }
             }
         }) {

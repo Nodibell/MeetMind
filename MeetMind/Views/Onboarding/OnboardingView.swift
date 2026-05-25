@@ -1,24 +1,156 @@
 import SwiftUI
+import AVFoundation
+import CoreGraphics
+import AppKit
 
-struct OnboardingView: View {
+@Observable
+final class OnboardingViewModel: @unchecked Sendable {
     let transcriptionService: any TranscriptionProvider
     
-    @State private var currentStep = 0
-    @State private var micPermission = false
-    @State private var screenPermission = false
-    @State private var downloadProgress: Double = 0
-    @State private var isDownloading = false
+    var currentStep = 0
+    var micPermission = false
+    var screenPermission = false
+    var downloadProgress: Double = 0.0
+    var isDownloading = false
+    
+    init(transcriptionService: any TranscriptionProvider) {
+        self.transcriptionService = transcriptionService
+    }
+    
+    @MainActor
+    func updatePermissionStates() {
+        self.micPermission = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        self.screenPermission = CGPreflightScreenCaptureAccess()
+    }
+    
+    @MainActor
+    func requestMicPermission() {
+        AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
+            guard let self else { return }
+            Task { @MainActor in
+                withAnimation {
+                    self.micPermission = granted
+                }
+            }
+        }
+    }
+    
+    @MainActor
+    func requestScreenPermission() {
+        let alreadyGranted = CGPreflightScreenCaptureAccess()
+        if alreadyGranted {
+            withAnimation {
+                self.screenPermission = true
+            }
+            return
+        }
+        
+        let granted = CGRequestScreenCaptureAccess()
+        if granted {
+            withAnimation {
+                self.screenPermission = true
+            }
+        } else {
+            let preflightGranted = CGPreflightScreenCaptureAccess()
+            withAnimation {
+                self.screenPermission = preflightGranted
+            }
+            
+            if !preflightGranted {
+                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+        }
+    }
+    
+    @MainActor
+    func startModelDownload() {
+        isDownloading = true
+        downloadProgress = 0.0
+        
+        subscribeToStateChanges()
+        
+        Task {
+            do {
+                try await transcriptionService.initialize(modelName: nil)
+            } catch {
+                isDownloading = false
+            }
+        }
+    }
+    
+    @MainActor
+    func checkCurrentDownloadState() {
+        Task {
+            let currentState = await transcriptionService.state
+            switch currentState {
+            case .downloading(let progress):
+                self.downloadProgress = progress
+                self.isDownloading = true
+                self.subscribeToStateChanges()
+            case .loading:
+                self.downloadProgress = 0.95
+                self.isDownloading = true
+                self.subscribeToStateChanges()
+            case .ready:
+                self.downloadProgress = 1.0
+                self.isDownloading = false
+            case .error(_):
+                self.downloadProgress = 0.0
+                self.isDownloading = false
+            default:
+                break
+            }
+        }
+    }
+    
+    @MainActor
+    private func subscribeToStateChanges() {
+        Task {
+            await transcriptionService.setOnStateChanged { [weak self] state in
+                guard let self else { return }
+                Task { @MainActor in
+                    switch state {
+                    case .downloading(let progress):
+                        self.downloadProgress = progress
+                        self.isDownloading = true
+                    case .loading:
+                        self.downloadProgress = 0.95
+                        self.isDownloading = true
+                    case .ready:
+                        self.downloadProgress = 1.0
+                        self.isDownloading = false
+                    case .error(let errorMsg):
+                        self.isDownloading = false
+                        AppLogger.error("Error downloading model in onboarding: \(errorMsg)")
+                    default:
+                        break
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct OnboardingView: View {
+    @State private var viewModel: OnboardingViewModel
     
     var onComplete: () -> Void
+    
+    init(transcriptionService: any TranscriptionProvider, onComplete: @escaping () -> Void) {
+        self._viewModel = State(initialValue: OnboardingViewModel(transcriptionService: transcriptionService))
+        self.onComplete = onComplete
+    }
     
     var body: some View {
         VStack(spacing: 30) {
             header
             
             ZStack {
-                if currentStep == 0 {
+                if viewModel.currentStep == 0 {
                     permissionsStep
-                } else if currentStep == 1 {
+                } else if viewModel.currentStep == 1 {
                     modelSetupStep
                 } else {
                     completionStep
@@ -32,7 +164,11 @@ struct OnboardingView: View {
         .frame(width: 650, height: 490)
         .background(Theme.Colors.backgroundPrimary)
         .onAppear {
-            checkCurrentDownloadState()
+            viewModel.checkCurrentDownloadState()
+            viewModel.updatePermissionStates()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            viewModel.updatePermissionStates()
         }
     }
     
@@ -56,14 +192,14 @@ struct OnboardingView: View {
             PermissionRow(
                 title: "Мікрофон",
                 description: "Необхідно для запису вашого голосу",
-                isGranted: micPermission,
+                isGranted: viewModel.micPermission,
                 action: requestMicPermission
             )
             
             PermissionRow(
                 title: "Запис екрану",
                 description: "Необхідно для захоплення системного аудіо (Zoom, Teams)",
-                isGranted: screenPermission,
+                isGranted: viewModel.screenPermission,
                 action: requestScreenPermission
             )
         }
@@ -81,25 +217,25 @@ struct OnboardingView: View {
                 .fixedSize(horizontal: false, vertical: true)
             
             VStack(spacing: 10) {
-                ProgressView(value: downloadProgress)
+                ProgressView(value: viewModel.downloadProgress)
                     .progressViewStyle(.linear)
                 
-                Text("\(Int(downloadProgress * 100))%")
+                Text("\(Int(viewModel.downloadProgress * 100))%")
                     .font(.caption)
                     .monospacedDigit()
             }
             .padding(.horizontal, 40)
             
-            if !isDownloading && downloadProgress < 1.0 {
+            if !viewModel.isDownloading && viewModel.downloadProgress < 1.0 {
                 Button("Почати завантаження") {
-                    startModelDownload()
+                    viewModel.startModelDownload()
                 }
                 .buttonStyle(.borderedProminent)
-            } else if isDownloading {
+            } else if viewModel.isDownloading {
                 Text("Завантаження моделі з Hugging Face...")
                     .foregroundColor(.secondary)
                     .font(.caption)
-            } else if downloadProgress >= 1.0 {
+            } else if viewModel.downloadProgress >= 1.0 {
                 Text("Завантаження завершено")
                     .foregroundColor(.green)
                     .font(.subheadline)
@@ -124,20 +260,20 @@ struct OnboardingView: View {
     
     private var footer: some View {
         HStack {
-            if currentStep > 0 {
+            if viewModel.currentStep > 0 {
                 Button("Назад") {
-                    withAnimation { currentStep -= 1 }
+                    withAnimation { viewModel.currentStep -= 1 }
                 }
             }
             
             Spacer()
             
-            if currentStep < 2 {
+            if viewModel.currentStep < 2 {
                 Button("Далі") {
-                    withAnimation { currentStep += 1 }
+                    withAnimation { viewModel.currentStep += 1 }
                 }
-                .disabled(currentStep == 0 && (!micPermission || !screenPermission))
-                .disabled(currentStep == 1 && downloadProgress < 1.0)
+                .disabled(viewModel.currentStep == 0 && (!viewModel.micPermission || !viewModel.screenPermission))
+                .disabled(viewModel.currentStep == 1 && viewModel.downloadProgress < 1.0)
                 .buttonStyle(.borderedProminent)
             } else {
                 Button("Почати роботу") {
@@ -151,82 +287,11 @@ struct OnboardingView: View {
     // MARK: - Actions
     
     private func requestMicPermission() {
-        // Real implementation would use AVCaptureDevice.requestAccess
-        withAnimation { micPermission = true }
+        viewModel.requestMicPermission()
     }
     
     private func requestScreenPermission() {
-        // Real implementation would trigger SCStream check
-        withAnimation { screenPermission = true }
-    }
-    
-    private func startModelDownload() {
-        isDownloading = true
-        downloadProgress = 0.0
-        
-        subscribeToStateChanges()
-        
-        Task {
-            do {
-                try await transcriptionService.initialize(modelName: nil)
-            } catch {
-                await MainActor.run {
-                    self.isDownloading = false
-                }
-            }
-        }
-    }
-    
-    private func checkCurrentDownloadState() {
-        Task {
-            let currentState = await transcriptionService.state
-            await MainActor.run {
-                switch currentState {
-                case .downloading(let progress):
-                    self.downloadProgress = progress
-                    self.isDownloading = true
-                    subscribeToStateChanges()
-                case .loading:
-                    self.downloadProgress = 0.95
-                    self.isDownloading = true
-                    subscribeToStateChanges()
-                case .ready:
-                    self.downloadProgress = 1.0
-                    self.isDownloading = false
-                case .error(let errorMsg):
-                    AppLogger.error(errorMsg)
-                    self.downloadProgress = 0.0
-                    self.isDownloading = false
-                default:
-                    break
-                }
-            }
-        }
-    }
-    
-    private func subscribeToStateChanges() {
-        Task {
-            await transcriptionService.setOnStateChanged { state in
-                Task { @MainActor in
-                    switch state {
-                    case .downloading(let progress):
-                        self.downloadProgress = progress
-                        self.isDownloading = true
-                    case .loading:
-                        self.downloadProgress = 0.95
-                        self.isDownloading = true
-                    case .ready:
-                        self.downloadProgress = 1.0
-                        self.isDownloading = false
-                    case .error(let errorMsg):
-                        self.isDownloading = false
-                        AppLogger.error("Error downloading model in onboarding: \(errorMsg)")
-                    default:
-                        break
-                    }
-                }
-            }
-        }
+        viewModel.requestScreenPermission()
     }
 }
 

@@ -7,6 +7,7 @@
 
 import Foundation
 import AppKit
+import CoreGraphics
 
 /// Manages application settings and service configuration
 @Observable
@@ -117,7 +118,24 @@ final class SettingsViewModel {
         audioManager.refreshDevices()
     }
 
-    func refreshSystemAudioSources() {
+    func refreshSystemAudioSources(forcePrompt: Bool = false) {
+        if forcePrompt {
+            let alreadyGranted = CGPreflightScreenCaptureAccess()
+            if !alreadyGranted {
+                let granted = CGRequestScreenCaptureAccess()
+                if !granted && !CGPreflightScreenCaptureAccess() {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+            }
+        }
+        
+        guard CGPreflightScreenCaptureAccess() else {
+            AppLogger.warning("Screen Recording permission not granted. Skipping system audio sources query in settings.")
+            return
+        }
+
         Task {
             do {
                 let sources = try await audioManager.getAvailableSystemAudioSources()
