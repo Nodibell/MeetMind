@@ -8,9 +8,9 @@ import MLXLMCommon
 import Tokenizers
 #endif
 
-/// "Deep Summary" engine implementing AirLLM-style layer-wise inference.
-/// Enables running 70B+ models on memory-constrained devices by loading
-/// layers on-demand from disk.
+/// "Deep Summary" engine implementing native Apple Silicon Metal-accelerated MLX inference.
+/// Enables running large models on memory-constrained devices by loading
+/// sharded weights efficiently using the MLX framework.
 actor DeepLLMService {
     
     private static let logger = Logger(subsystem: "com.meetmind.app", category: "DeepLLM")

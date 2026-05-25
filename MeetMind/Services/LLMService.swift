@@ -416,11 +416,37 @@ actor LLMService: LLMProvider {
                 try await deepLLM.loadModel(modelPath: modelPath)
             }
             let response = try await deepLLM.generate(messages: messages, maxTokens: maxTokens)
-            return response
+            return cleanModelResponse(response)
         } catch {
             AppLogger.error("DeepMLX: request execution error: \(error.localizedDescription)")
             throw error
         }
+    }
+    
+    private func cleanModelResponse(_ response: String) -> String {
+        // gpt-oss uses `<|channel|>analysis<|message|> ... <|end|><|start|>assistant<|channel|>final<|message|>`
+        if let finalRange = response.range(of: "<|channel|>final<|message|>") {
+            var cleanText = String(response[finalRange.upperBound...])
+            if let endRange = cleanText.range(of: "<|end|>") {
+                cleanText = String(cleanText[..<endRange.lowerBound])
+            }
+            return cleanText.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        
+        // Fallback: strip any remaining special chat/channel tags
+        var cleaned = response
+        let tokensToRemove = [
+            "<|channel|>analysis<|message|>",
+            "<|channel|>final<|message|>",
+            "<|end|>",
+            "<|start|>assistant",
+            "<|im_start|>",
+            "<|im_end|>"
+        ]
+        for token in tokensToRemove {
+            cleaned = cleaned.replacingOccurrences(of: token, with: "")
+        }
+        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
     // MARK: - Summary Generation
