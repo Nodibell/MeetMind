@@ -144,9 +144,16 @@ struct RecordingView: View {
                         .tint(Theme.Colors.accentPrimary)
                         .frame(maxWidth: 200)
                     
-                    Text("Транскрибування (high-quality): \(viewModel.transcriptionProgressValue, format: .percent)")
-                        .font(Theme.Typography.caption)
-                        .foregroundStyle(Theme.Colors.textSecondary)
+                    // Show download/init status when available, else show percentage
+                    if !viewModel.transcriptionProgress.isEmpty {
+                        Text(viewModel.transcriptionProgress)
+                            .font(Theme.Typography.caption)
+                            .foregroundStyle(Theme.Colors.textSecondary)
+                    } else {
+                        Text(String(format: "%.0f%%", viewModel.transcriptionProgressValue * 100))
+                            .font(Theme.Typography.monoCaption)
+                            .foregroundStyle(Theme.Colors.textTertiary)
+                    }
                 }
             } else {
                 ProgressView()

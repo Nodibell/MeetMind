@@ -13,6 +13,7 @@ struct RecordingControlsView: View {
 
     @State private var isHoveringRecord = false
     @State private var isPressing = false
+    @State private var spinAngle: Double = 0
 
     var body: some View {
         VStack(spacing: Theme.Spacing.xl * 1.5) {
@@ -92,7 +93,7 @@ struct RecordingControlsView: View {
                                     .fill(.white)
                                     .frame(width: 22, height: 22)
                             } else if isProcessing {
-                                // Custom SwiftUI-compatible progress view (fixes drawingGroup errors)
+                                // Spinning arc indicator
                                 Circle()
                                     .stroke(lineWidth: 3)
                                     .opacity(0.3)
@@ -101,10 +102,17 @@ struct RecordingControlsView: View {
                                         Circle()
                                             .trim(from: 0, to: 0.3)
                                             .stroke(style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                                            .rotationEffect(Angle(degrees: isProcessing ? 360 : 0))
-                                            .animation(isProcessing ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isProcessing)
+                                            .rotationEffect(.degrees(spinAngle))
                                     )
                                     .foregroundStyle(.white)
+                                    .onAppear {
+                                        withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) {
+                                            spinAngle = 360
+                                        }
+                                    }
+                                    .onDisappear {
+                                        spinAngle = 0
+                                    }
                             } else {
                                 Circle()
                                     .fill(.white)

@@ -33,6 +33,7 @@ struct ContentView: View {
     // UI state
     @State private var dbErrorDismissed = false
     @State private var isShowingOnboarding = false
+    @State private var isDroppingFile = false
 
     // MARK: - Body
 
@@ -60,6 +61,40 @@ struct ContentView: View {
                 isShowingOnboarding = false
                 UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
                 recordingVM?.refreshSystemAudioSources(forcePrompt: false)
+            }
+        }
+        // Drag-and-drop file support
+        .dropDestination(for: URL.self) { urls, _ in
+            guard let url = urls.first else { return false }
+            let supportedExtensions: Set<String> = ["wav", "mp3", "m4a", "flac", "aac", "mp4", "mov", "m4v", "mkv", "avi", "caf", "opus", "ogg"]
+            guard supportedExtensions.contains(url.pathExtension.lowercased()) else { return false }
+            router.startNewRecording()
+            Task {
+                await recordingVM?.processImportedFile(at: url)
+            }
+            return true
+        } isTargeted: { isTargeted in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isDroppingFile = isTargeted
+            }
+        }
+        .overlay {
+            if isDroppingFile {
+                ZStack {
+                    Color.black.opacity(0.4)
+                        .ignoresSafeArea()
+                    VStack(spacing: 16) {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .font(.system(size: 56))
+                            .foregroundStyle(.white)
+                        Text("Drop to transcribe")
+                            .font(.title2.bold())
+                            .foregroundStyle(.white)
+                    }
+                    .padding(40)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                }
             }
         }
     }

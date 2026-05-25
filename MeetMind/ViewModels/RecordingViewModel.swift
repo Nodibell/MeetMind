@@ -118,9 +118,12 @@ final class RecordingViewModel {
                     case .downloading(let progress):
                         let percentInt = Int(round(progress * 100))
                         self.transcriptionProgress = String(localized: "Завантаження моделі: \(percentInt)%")
+                        // Show download progress in first half of the bar (0% → 50%)
+                        self.transcriptionProgressValue = progress * 0.5
                         self.isTranscriptionReady = false
                     case .loading:
                         self.transcriptionProgress = String(localized: "Ініціалізація моделі AI...")
+                        self.transcriptionProgressValue = 0.5
                         self.isTranscriptionReady = false
                     case .ready:
                         self.transcriptionProgress = ""
@@ -129,7 +132,8 @@ final class RecordingViewModel {
                         self.transcriptionProgress = msg
                         self.isTranscriptionReady = false
                     case .transcribing(let progress):
-                        self.transcriptionProgressValue = progress
+                        // Transcription occupies second half of the bar (50% → 100%)
+                        self.transcriptionProgressValue = 0.5 + progress * 0.5
                     default:
                         break
                     }
