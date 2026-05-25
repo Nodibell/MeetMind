@@ -8,8 +8,6 @@ struct OnboardingView: View {
     @State private var screenPermission = false
     @State private var downloadProgress: Double = 0
     @State private var isDownloading = false
-    @State private var lastRawProgress: Double = 0
-    @State private var fileDownloadsCompleted = 0
     
     var onComplete: () -> Void
     
@@ -33,6 +31,9 @@ struct OnboardingView: View {
         .padding(40)
         .frame(width: 650, height: 490)
         .background(Theme.Colors.backgroundPrimary)
+        .onAppear {
+            checkCurrentDownloadState()
+        }
     }
     
     private var header: some View {
@@ -162,30 +163,58 @@ struct OnboardingView: View {
     private func startModelDownload() {
         isDownloading = true
         downloadProgress = 0.0
-        lastRawProgress = 0.0
-        fileDownloadsCompleted = 0
         
+        subscribeToStateChanges()
+        
+        Task {
+            do {
+                try await transcriptionService.initialize(modelName: nil)
+            } catch {
+                await MainActor.run {
+                    self.isDownloading = false
+                }
+            }
+        }
+    }
+    
+    private func checkCurrentDownloadState() {
+        Task {
+            let currentState = await transcriptionService.state
+            await MainActor.run {
+                switch currentState {
+                case .downloading(let progress):
+                    self.downloadProgress = progress
+                    self.isDownloading = true
+                    subscribeToStateChanges()
+                case .loading:
+                    self.downloadProgress = 0.95
+                    self.isDownloading = true
+                    subscribeToStateChanges()
+                case .ready:
+                    self.downloadProgress = 1.0
+                    self.isDownloading = false
+                case .error(let errorMsg):
+                    AppLogger.error(errorMsg)
+                    self.downloadProgress = 0.0
+                    self.isDownloading = false
+                default:
+                    break
+                }
+            }
+        }
+    }
+    
+    private func subscribeToStateChanges() {
         Task {
             await transcriptionService.setOnStateChanged { state in
                 Task { @MainActor in
                     switch state {
                     case .downloading(let progress):
-                        // Detect when a file finishes and a new one starts (progress drops from high to low)
-                        if progress < 0.15 && self.lastRawProgress > 0.85 {
-                            self.fileDownloadsCompleted += 1
-                        }
-                        self.lastRawProgress = progress
-                        
-                        // Weighted progress calculation assuming 5 files (config, tokenizer, preprocessor, encoder, decoder)
-                        let filesCount = 5.0
-                        let base = Double(self.fileDownloadsCompleted) / filesCount
-                        let currentSegmentWeight = 1.0 / filesCount
-                        let computedProgress = base + (progress * currentSegmentWeight)
-                        
-                        // Strict monotonic filter capped at 99% to prevent visual jumping
-                        self.downloadProgress = min(0.99, max(self.downloadProgress, computedProgress))
+                        self.downloadProgress = progress
+                        self.isDownloading = true
                     case .loading:
                         self.downloadProgress = 0.95
+                        self.isDownloading = true
                     case .ready:
                         self.downloadProgress = 1.0
                         self.isDownloading = false
@@ -195,14 +224,6 @@ struct OnboardingView: View {
                     default:
                         break
                     }
-                }
-            }
-            
-            do {
-                try await transcriptionService.initialize(modelName: nil)
-            } catch {
-                await MainActor.run {
-                    self.isDownloading = false
                 }
             }
         }
@@ -237,6 +258,7 @@ struct PermissionRow: View {
 #Preview {
     struct MockTranscriptionProvider: TranscriptionProvider {
         var isReady: Bool { false }
+        var state: TranscriptionService.ServiceState { .notReady }
         func initialize(modelName: String?) async throws {}
         func transcribeLive(samples: [Float], offset: TimeInterval) async throws -> [MeetingTranscriptSegment] { [] }
         func transcribeFile(at url: URL) async throws -> MeetingTranscriptDocument {

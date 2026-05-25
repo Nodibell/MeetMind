@@ -29,6 +29,11 @@ actor TranscriptionService: TranscriptionProvider {
     private var memoryPressureSource: (any DispatchSourceMemoryPressure)?
     private let inactivityTimeout: UInt64 = 5 * 60 * 1_000_000_000 // 5 minutes in nanoseconds
 
+    // Monotonic download progress tracking variables
+    private var fileDownloadsCompleted = 0
+    private var lastRawProgress: Double = 0.0
+    private var monotonicDownloadProgress: Double = 0.0
+
     // MARK: - Callbacks
     var onStateChanged: (@Sendable (ServiceState) -> Void)?
     var onSegmentTranscribed: (@Sendable (MeetingTranscriptSegment) -> Void)?
@@ -50,6 +55,11 @@ actor TranscriptionService: TranscriptionProvider {
         setupMemoryPressureListener()
         AppLogger.info("Initializing WhisperKit with model: \(model)")
 
+        // Reset progress tracking
+        fileDownloadsCompleted = 0
+        lastRawProgress = 0.0
+        monotonicDownloadProgress = 0.0
+
         updateState(.downloading(progress: 0))
 
         do {
@@ -58,7 +68,7 @@ actor TranscriptionService: TranscriptionProvider {
                 variant: model,
                 progressCallback: { progress in
                     Task { [weak self] in
-                        await self?.updateState(.downloading(progress: progress.fractionCompleted))
+                        await self?.updateDownloadProgress(progress.fractionCompleted)
                     }
                 }
             )
@@ -85,6 +95,25 @@ actor TranscriptionService: TranscriptionProvider {
             updateState(.error(String(localized: "Не вдалося завантажити модель: \(error.localizedDescription)")))
             throw TranscriptionError.modelLoadFailed(error.localizedDescription)
         }
+    }
+
+    private func updateDownloadProgress(_ rawProgress: Double) {
+        // Detect when a file finishes and a new one starts (progress drops from high to low)
+        if rawProgress < 0.15 && self.lastRawProgress > 0.85 {
+            self.fileDownloadsCompleted += 1
+        }
+        self.lastRawProgress = rawProgress
+        
+        // Weighted progress calculation assuming 5 files (config, tokenizer, preprocessor, encoder, decoder)
+        let filesCount = 5.0
+        let base = Double(self.fileDownloadsCompleted) / filesCount
+        let currentSegmentWeight = 1.0 / filesCount
+        let computedProgress = base + (rawProgress * currentSegmentWeight)
+        
+        // Strict monotonic filter capped at 99% to prevent visual jumping
+        self.monotonicDownloadProgress = min(0.99, max(self.monotonicDownloadProgress, computedProgress))
+        
+        updateState(.downloading(progress: self.monotonicDownloadProgress))
     }
 
     /// Setup listener for system-wide memory pressure

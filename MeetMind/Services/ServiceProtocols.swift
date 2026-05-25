@@ -36,6 +36,7 @@ protocol LLMProvider: Sendable {
 /// Protocol defining the interface for speech-to-text operations.
 protocol TranscriptionProvider: Sendable {
     var isReady: Bool { get async }
+    var state: TranscriptionService.ServiceState { get async }
     func initialize(modelName: String?) async throws
     func transcribeLive(samples: [Float], offset: TimeInterval) async throws -> [MeetingTranscriptSegment]
     func transcribeFile(at url: URL) async throws -> MeetingTranscriptDocument
