@@ -140,7 +140,7 @@ struct ContentView: View {
             recordingDetail
 
         case .meeting(let id):
-            MeetingDetailForID(meetingID: id, llmService: llmService)
+            MeetingDetailForID(meetingID: id, llmService: llmService, transcriptionService: transcriptionService)
 
         case .welcome:
             welcomeView
@@ -297,15 +297,17 @@ struct ContentView: View {
 struct MeetingDetailForID: View {
     let meetingID: UUID
     let llmService: any LLMProvider
+    let transcriptionService: any TranscriptionProvider
 
     @Environment(\.modelContext) private var modelContext
     @Query private var meetings: [Meeting]
 
     @State private var detailVM: MeetingDetailViewModel?
 
-    init(meetingID: UUID, llmService: any LLMProvider) {
+    init(meetingID: UUID, llmService: any LLMProvider, transcriptionService: any TranscriptionProvider) {
         self.meetingID = meetingID
         self.llmService = llmService
+        self.transcriptionService = transcriptionService
 
         let predicate = #Predicate<Meeting> { $0.id == meetingID }
         _meetings = Query(filter: predicate)
@@ -314,7 +316,7 @@ struct MeetingDetailForID: View {
     var body: some View {
         Group {
             if let meeting = meetings.first ?? findMeetingDirectly() {
-                MeetingDetailViewWrapper(meeting: meeting, llmService: llmService)
+                MeetingDetailViewWrapper(meeting: meeting, llmService: llmService, transcriptionService: transcriptionService)
                     .id(meeting.id)
             } else {
                 VStack(spacing: Theme.Spacing.md) {
@@ -339,6 +341,7 @@ struct MeetingDetailForID: View {
 struct MeetingDetailViewWrapper: View {
     let meeting: Meeting
     let llmService: any LLMProvider
+    let transcriptionService: any TranscriptionProvider
 
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: MeetingDetailViewModel?
@@ -349,7 +352,7 @@ struct MeetingDetailViewWrapper: View {
                 MeetingDetailView(viewModel: vm)
             } else {
                 Color.clear.onAppear {
-                    let vm = MeetingDetailViewModel(meeting: meeting, llmService: llmService)
+                    let vm = MeetingDetailViewModel(meeting: meeting, llmService: llmService, transcriptionService: transcriptionService)
                     vm.setModelContext(modelContext)
                     viewModel = vm
                 }

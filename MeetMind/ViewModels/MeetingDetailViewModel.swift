@@ -33,8 +33,14 @@ final class MeetingDetailViewModel {
         }
     }
     
+    // MARK: - Transcription State
+    var isTranscribing: Bool = false
+    var transcriptionProgressValue: Double = 0.0
+    var transcriptionStatusText: String = ""
+    
     // MARK: - Services
     private let llmService: any LLMProvider
+    private let transcriptionService: any TranscriptionProvider
     private var modelContext: ModelContext?
     private var repository: MeetingRepository?
     private let exportUseCase = ExportMeetingUseCase()
@@ -50,11 +56,12 @@ final class MeetingDetailViewModel {
     
     // MARK: - Init
     
-    init(meeting: Meeting, llmService: any LLMProvider) {
+    init(meeting: Meeting, llmService: any LLMProvider, transcriptionService: any TranscriptionProvider) {
         self.meeting = meeting
         self.meetingTitle = meeting.title
         self.selectedSummaryLanguage = meeting.summaryLanguage ?? AppSettings.shared.summaryLanguage
         self.llmService = llmService
+        self.transcriptionService = transcriptionService
     }
     
     func setModelContext(_ context: ModelContext) {
@@ -355,6 +362,92 @@ final class MeetingDetailViewModel {
         summaryTask = nil
         isRegeneratingSummary = false
         streamingSummary = summary // restore last saved
+    }
+
+    // MARK: - Re-transcribe Meeting
+    
+    func retranscribeMeeting() async {
+        guard let audioURL = meeting.audioURL else {
+            errorMessage = "Файл аудіозапису відсутній"
+            return
+        }
+        
+        isTranscribing = true
+        transcriptionProgressValue = 0.0
+        transcriptionStatusText = String(localized: "Ініціалізація...")
+        errorMessage = nil
+        
+        // Setup transcription service callback
+        await transcriptionService.setOnStateChanged { [weak self] newState in
+            guard let self else { return }
+            Task { @MainActor in
+                switch newState {
+                case .downloading(let progress):
+                    let percentInt = Int(round(progress * 100))
+                    self.transcriptionStatusText = String(localized: "Завантаження моделі: \(percentInt)%")
+                case .loading:
+                    self.transcriptionStatusText = String(localized: "Ініціалізація моделі AI...")
+                case .ready:
+                    self.transcriptionStatusText = String(localized: "Готово")
+                case .error(let msg):
+                    self.transcriptionStatusText = msg
+                case .transcribing(let progress):
+                    self.transcriptionProgressValue = progress
+                    self.transcriptionStatusText = String(localized: "Транскрипція...")
+                default:
+                    break
+                }
+            }
+        }
+        
+        do {
+            // Set status to transcribing in database
+            await MainActor.run {
+                meeting.status = .transcribing
+                try? modelContext?.save()
+            }
+            
+            // Run transcription
+            let document = try await transcriptionService.transcribeFile(at: audioURL)
+            
+            // Save transcript JSON to file
+            let transcriptURL = Constants.transcriptsDirectory
+                .appendingPathComponent("\(meeting.filenameBase).\(Constants.transcriptFileExtension)")
+            try document.save(to: transcriptURL)
+            
+            await MainActor.run {
+                self.meeting.transcriptFilename = transcriptURL.lastPathComponent
+                self.meeting.language = document.language
+                if document.totalDuration > 0 {
+                    self.meeting.duration = document.totalDuration
+                }
+                try? self.modelContext?.save()
+            }
+            
+            // Sync SwiftData ActionItems and segments
+            if let repository {
+                try repository.syncStructuredEntities(for: meeting)
+            }
+            
+            // Set status back to complete
+            await MainActor.run {
+                meeting.status = .complete
+                try? modelContext?.save()
+                isTranscribing = false
+            }
+            
+            // Reload local transcript view state
+            await loadTranscript()
+            
+        } catch {
+            await MainActor.run {
+                self.errorMessage = "Помилка транскрипції: \(error.localizedDescription)"
+                self.meeting.status = .error
+                self.meeting.errorMessage = error.localizedDescription
+                try? self.modelContext?.save()
+                isTranscribing = false
+            }
+        }
     }
     
     // MARK: - Export

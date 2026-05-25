@@ -16,9 +16,13 @@ struct TranscriptPanelView: View {
     var translatedText: String? = nil
     var translatedSegments: [UUID: String] = [:]
     var isTranslating: Bool = false
+    var isTranscribing: Bool = false
+    var transcriptionProgress: Double = 0.0
+    var transcriptionStatusText: String = ""
     var onClearTranslation: (() -> Void)? = nil
     var onUpdateSpeakerName: ((String, String) -> Void)? = nil
     var onUpdateSpeakerColor: ((String, Color) -> Void)? = nil
+    var onRetranscribe: (() -> Void)? = nil
     
     @State private var highlightedSegmentID: UUID?
     
@@ -56,7 +60,9 @@ struct TranscriptPanelView: View {
                 .background(Theme.Colors.borderSubtle)
             
             // Content
-            if isLoading {
+            if isTranscribing {
+                transcribingProgressState
+            } else if isLoading {
                 loadingState
             } else if isTranslating {
                 VStack(spacing: Theme.Spacing.md) {
@@ -178,13 +184,65 @@ struct TranscriptPanelView: View {
     }
     
     private var emptyState: some View {
-        VStack(spacing: Theme.Spacing.md) {
+        VStack(spacing: Theme.Spacing.lg) {
+            Spacer()
+            
             Image(systemName: "doc.text")
-                .font(.system(size: 32))
+                .font(.system(size: 36))
                 .foregroundStyle(Theme.Colors.textTertiary)
+            
             Text("Транскрипт відсутній")
                 .font(Theme.Typography.body)
                 .foregroundStyle(Theme.Colors.textTertiary)
+            
+            if let onRetranscribe {
+                Button(action: onRetranscribe) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "waveform.badge.plus")
+                        Text("Транскрибувати файл")
+                    }
+                    .font(Theme.Typography.captionMedium)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, Theme.Spacing.lg)
+                    .padding(.vertical, Theme.Spacing.sm)
+                    .background(Theme.Gradients.accent)
+                    .clipShape(Capsule())
+                    .shadow(color: Theme.Colors.accentPrimary.opacity(0.2), radius: 6, y: 2)
+                }
+                .buttonStyle(.plain)
+            }
+            
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    private var transcribingProgressState: some View {
+        VStack(spacing: Theme.Spacing.md) {
+            ZStack {
+                Circle()
+                    .fill(Theme.Colors.accentPrimary.opacity(0.1))
+                    .frame(width: 80, height: 80)
+                
+                Image(systemName: "brain.head.profile")
+                    .font(.system(size: 32))
+                    .foregroundStyle(Theme.Gradients.accent)
+            }
+            
+            VStack(spacing: Theme.Spacing.xs) {
+                Text(transcriptionStatusText.isEmpty ? String(localized: "Оновлення транскрипту...") : transcriptionStatusText)
+                    .font(Theme.Typography.bodyMedium)
+                    .foregroundStyle(Theme.Colors.textPrimary)
+                
+                ProgressView(value: transcriptionProgress)
+                    .progressViewStyle(.linear)
+                    .tint(Theme.Colors.accentPrimary)
+                    .frame(width: 200)
+                
+                Text(String(format: "%.0f%%", transcriptionProgress * 100))
+                    .font(Theme.Typography.monoCaption)
+                    .foregroundStyle(Theme.Colors.textTertiary)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

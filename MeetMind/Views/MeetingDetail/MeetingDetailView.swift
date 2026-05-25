@@ -53,6 +53,9 @@ struct MeetingDetailView: View {
                     translatedText: viewModel.translatedTranscript,
                     translatedSegments: viewModel.translatedSegments,
                     isTranslating: viewModel.isTranslatingTranscript,
+                    isTranscribing: viewModel.isTranscribing,
+                    transcriptionProgress: viewModel.transcriptionProgressValue,
+                    transcriptionStatusText: viewModel.transcriptionStatusText,
                     onClearTranslation: {
                         viewModel.translatedTranscript = nil
                         viewModel.translatedSegments = [:]
@@ -62,6 +65,9 @@ struct MeetingDetailView: View {
                     },
                     onUpdateSpeakerColor: { id, color in
                         viewModel.updateSpeakerColor(id: id, color: color)
+                    },
+                    onRetranscribe: {
+                        Task { await viewModel.retranscribeMeeting() }
                     }
                 )
                 .frame(minWidth: 300)

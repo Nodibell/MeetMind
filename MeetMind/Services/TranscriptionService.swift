@@ -29,9 +29,7 @@ actor TranscriptionService: TranscriptionProvider {
     private var memoryPressureSource: (any DispatchSourceMemoryPressure)?
     private let inactivityTimeout: UInt64 = 5 * 60 * 1_000_000_000 // 5 minutes in nanoseconds
 
-    // Monotonic download progress tracking variables
-    private var fileDownloadsCompleted = 0
-    private var lastRawProgress: Double = 0.0
+    // Monotonic download progress tracking variable
     private var monotonicDownloadProgress: Double = 0.0
 
     // MARK: - Callbacks
@@ -56,8 +54,6 @@ actor TranscriptionService: TranscriptionProvider {
         AppLogger.info("Initializing WhisperKit with model: \(model)")
 
         // Reset progress tracking
-        fileDownloadsCompleted = 0
-        lastRawProgress = 0.0
         monotonicDownloadProgress = 0.0
 
         updateState(.downloading(progress: 0))
@@ -98,20 +94,8 @@ actor TranscriptionService: TranscriptionProvider {
     }
 
     private func updateDownloadProgress(_ rawProgress: Double) {
-        // Detect when a file finishes and a new one starts (progress drops from high to low)
-        if rawProgress < 0.15 && self.lastRawProgress > 0.85 {
-            self.fileDownloadsCompleted += 1
-        }
-        self.lastRawProgress = rawProgress
-        
-        // Weighted progress calculation assuming 5 files (config, tokenizer, preprocessor, encoder, decoder)
-        let filesCount = 5.0
-        let base = Double(self.fileDownloadsCompleted) / filesCount
-        let currentSegmentWeight = 1.0 / filesCount
-        let computedProgress = base + (rawProgress * currentSegmentWeight)
-        
         // Strict monotonic filter capped at 99% to prevent visual jumping
-        self.monotonicDownloadProgress = min(0.99, max(self.monotonicDownloadProgress, computedProgress))
+        self.monotonicDownloadProgress = min(0.99, max(self.monotonicDownloadProgress, rawProgress))
         
         updateState(.downloading(progress: self.monotonicDownloadProgress))
     }
