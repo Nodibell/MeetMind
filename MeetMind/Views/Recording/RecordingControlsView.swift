@@ -309,7 +309,7 @@ struct RecordingControlsView: View {
     }
 
     @ViewBuilder
-    private func customPickerOption(_ label: String, systemImage: String, source: AudioManager.AudioSource) -> some View {
+    private func customPickerOption(_ label: LocalizedStringKey, systemImage: String, source: AudioManager.AudioSource) -> some View {
         let isSelected = viewModel.audioManager.audioSource == source
         Button(action: {
             withAnimation(.interactiveSpring(response: 0.25, dampingFraction: 0.75)) {
