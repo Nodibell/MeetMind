@@ -8,6 +8,8 @@ struct OnboardingView: View {
     @State private var screenPermission = false
     @State private var downloadProgress: Double = 0
     @State private var isDownloading = false
+    @State private var lastRawProgress: Double = 0
+    @State private var fileDownloadsCompleted = 0
     
     var onComplete: () -> Void
     
@@ -160,13 +162,28 @@ struct OnboardingView: View {
     private func startModelDownload() {
         isDownloading = true
         downloadProgress = 0.0
+        lastRawProgress = 0.0
+        fileDownloadsCompleted = 0
         
         Task {
             await transcriptionService.setOnStateChanged { state in
                 Task { @MainActor in
                     switch state {
                     case .downloading(let progress):
-                        self.downloadProgress = progress
+                        // Detect when a file finishes and a new one starts (progress drops from high to low)
+                        if progress < 0.15 && self.lastRawProgress > 0.85 {
+                            self.fileDownloadsCompleted += 1
+                        }
+                        self.lastRawProgress = progress
+                        
+                        // Weighted progress calculation assuming 5 files (config, tokenizer, preprocessor, encoder, decoder)
+                        let filesCount = 5.0
+                        let base = Double(self.fileDownloadsCompleted) / filesCount
+                        let currentSegmentWeight = 1.0 / filesCount
+                        let computedProgress = base + (progress * currentSegmentWeight)
+                        
+                        // Strict monotonic filter capped at 99% to prevent visual jumping
+                        self.downloadProgress = min(0.99, max(self.downloadProgress, computedProgress))
                     case .loading:
                         self.downloadProgress = 0.95
                     case .ready:
