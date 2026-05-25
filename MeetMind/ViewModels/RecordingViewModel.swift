@@ -115,7 +115,7 @@ final class RecordingViewModel {
                 Task { @MainActor in
                     switch newState {
                     case .downloading(let progress):
-                        self.transcriptionProgress = String(localized: "Завантаження моделі: \(Int(progress * 100))%")
+                        self.transcriptionProgress = String(localized: "Завантаження моделі: \(progress, format: .percent)")
                         self.isTranscriptionReady = false
                     case .loading:
                         self.transcriptionProgress = String(localized: "Ініціалізація моделі AI...")

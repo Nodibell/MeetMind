@@ -239,7 +239,7 @@ struct OnboardingView: View {
                 ProgressView(value: viewModel.downloadProgress)
                     .progressViewStyle(.linear)
                 
-                Text("\(Int(viewModel.downloadProgress * 100))%")
+                Text(viewModel.downloadProgress, format: .percent)
                     .font(.caption)
                     .monospacedDigit()
             }
