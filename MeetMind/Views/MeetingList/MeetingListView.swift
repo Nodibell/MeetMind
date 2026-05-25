@@ -16,6 +16,7 @@ struct MeetingListView: View {
     @Binding var selectedMeetingID: UUID?
     @Bindable var viewModel: MeetingListViewModel
     var onNewRecording: () -> Void
+    var onImportFile: () -> Void
 
     @State private var meetingToDelete: Meeting?
     
@@ -43,6 +44,15 @@ struct MeetingListView: View {
                 }
                 .buttonStyle(.plain)
                 .help("Сортування")
+                
+                // Import button
+                Button(action: onImportFile) {
+                    Image(systemName: "doc.badge.plus")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Theme.Colors.accentPrimary)
+                }
+                .buttonStyle(.plain)
+                .help("Імпортувати аудіо/відео")
                 
                 // New recording button
                 Button(action: onNewRecording) {

@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
 
 /// Main app view — NavigationSplitView with meeting list sidebar and detail content.
 /// Navigation state is owned by `AppRouter`; this view is responsible only for layout.
@@ -117,6 +118,9 @@ struct ContentView: View {
             onNewRecording: {
                 router.startNewRecording()
                 recordingVM?.resetForNewRecording()
+            },
+            onImportFile: {
+                importFile()
             }
         )
     }
@@ -254,6 +258,24 @@ struct ContentView: View {
     private func checkFirstRun() {
         guard !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") else { return }
         isShowingOnboarding = true
+    }
+    
+    private func importFile() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        
+        let extensions = ["wav", "mp3", "m4a", "flac", "aac", "mp4", "mov", "m4v", "mkv", "avi"]
+        panel.allowedContentTypes = extensions.compactMap { UTType(filenameExtension: $0) }
+        
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        
+        router.startNewRecording()
+        
+        Task {
+            await recordingVM?.processImportedFile(at: url)
+        }
     }
 
     private func setupViewModels() {

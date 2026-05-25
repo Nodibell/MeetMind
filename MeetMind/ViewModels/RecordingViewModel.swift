@@ -18,6 +18,7 @@ final class RecordingViewModel {
     enum RecordingState: Equatable {
         case idle
         case preparing
+        case extracting
         case recording
         case stopping
         case transcribing
@@ -507,6 +508,140 @@ final class RecordingViewModel {
             AppLogger.info("Exported to: \(url.path)")
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    // MARK: - Import File Processing
+    
+    func processImportedFile(at url: URL) async {
+        await MainActor.run {
+            self.errorMessage = nil
+            self.liveTranscript = []
+            self.fullTranscript = nil
+            self.summary = ""
+            self.streamingSummary = ""
+            self.transcriptionProgressValue = 0
+            self.completedMeetingID = nil
+            self.meetingTitle = url.deletingPathExtension().lastPathComponent
+            self.state = .extracting
+        }
+        
+        do {
+            // 1. Create a unique target audio filename in Constants.recordingsDirectory
+            let uniqueID = UUID().uuidString
+            let targetURL = Constants.recordingsDirectory.appendingPathComponent("\(uniqueID).m4a")
+            
+            // 2. Extract the audio track
+            try await AudioExtractor.extractAudio(from: url, to: targetURL)
+            
+            // 3. Create the Meeting object
+            let meeting = Meeting(title: self.meetingTitle)
+            meeting.audioFilename = targetURL.lastPathComponent
+            
+            await MainActor.run {
+                self.currentMeeting = meeting
+                try? self.repository?.insert(meeting)
+                self.state = .transcribing
+                self.currentMeeting?.status = .transcribing
+                try? self.modelContext?.save()
+            }
+            
+            // 4. Transcribe using transcriptionService.transcribeFile
+            let document = try await transcriptionService.transcribeFile(at: targetURL)
+            
+            await MainActor.run {
+                self.fullTranscript = document
+                self.liveTranscript = document.segments
+                self.currentMeeting?.language = document.language
+                if document.totalDuration > 0 {
+                    self.currentMeeting?.duration = document.totalDuration
+                }
+            }
+            
+            // 5. Save transcript to file
+            if let filenameBase = await MainActor.run(body: { currentMeeting?.filenameBase }) {
+                let transcriptURL = Constants.transcriptsDirectory
+                    .appendingPathComponent("\(filenameBase).\(Constants.transcriptFileExtension)")
+                try document.save(to: transcriptURL)
+                
+                await MainActor.run {
+                    self.currentMeeting?.transcriptFilename = transcriptURL.lastPathComponent
+                    self.repository?.trySave()
+                }
+            }
+            
+            // 6. Summarize & complete
+            await MainActor.run {
+                self.state = .summarizing
+                self.currentMeeting?.status = .summarizing
+                try? self.modelContext?.save()
+            }
+            
+            let transcriptText = document.formattedText
+            if !transcriptText.isEmpty {
+                // Generate title
+                do {
+                    let newTitle = try await llmService.generateTitle(transcript: transcriptText)
+                    if !newTitle.isEmpty {
+                        await MainActor.run {
+                            self.meetingTitle = newTitle
+                            self.currentMeeting?.title = newTitle
+                            try? self.modelContext?.save()
+                        }
+                    }
+                } catch {
+                    AppLogger.warning("Failed to generate meeting title: \(error.localizedDescription)")
+                }
+                
+                // Setup streaming summary
+                await llmService.setOnTokenReceived { [weak self] token in
+                    guard let self else { return }
+                    Task { @MainActor in
+                        self.streamingSummary += token
+                    }
+                }
+                
+                let targetLanguage = await MainActor.run { AppSettings.shared.summaryLanguage }
+                let summaryResult = try await llmService.generateSummary(transcript: transcriptText, targetLanguage: targetLanguage)
+                
+                // Save summary
+                if let filenameBase = await MainActor.run(body: { currentMeeting?.filenameBase }) {
+                    let summaryURL = Constants.summariesDirectory
+                        .appendingPathComponent("\(filenameBase).\(Constants.summaryFileExtension)")
+                    try summaryResult.write(to: summaryURL, atomically: true, encoding: .utf8)
+                    
+                    await MainActor.run {
+                        self.summary = summaryResult
+                        self.streamingSummary = summaryResult
+                        self.currentMeeting?.summaryFilename = summaryURL.lastPathComponent
+                        try? self.modelContext?.save()
+                    }
+                }
+            }
+            
+            // Complete
+            await MainActor.run {
+                if let meeting = self.currentMeeting {
+                    try? self.repository?.syncStructuredEntities(for: meeting)
+                }
+                self.currentMeeting?.status = .complete
+                self.repository?.trySave()
+                self.completedMeetingID = self.currentMeeting?.id
+                self.state = .complete
+                
+                if AppSettings.shared.autoExportToObsidian {
+                    self.exportToObsidian()
+                }
+            }
+            
+        } catch {
+            await MainActor.run {
+                self.state = .error(error.localizedDescription)
+                self.errorMessage = error.localizedDescription
+                self.currentMeeting?.status = .error
+                self.currentMeeting?.errorMessage = error.localizedDescription
+                try? self.modelContext?.save()
+            }
         }
     }
 

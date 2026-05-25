@@ -164,6 +164,7 @@ struct RecordingView: View {
     private var processingLabel: LocalizedStringKey {
         switch viewModel.state {
         case .preparing: return "Підготовка джерела аудіо..."
+        case .extracting: return "Вилучення аудіодоріжки з файлу..."
         case .transcribing: return "Транскрипція аудіо (high-quality)..."
         case .summarizing: return "Генерація резюме через AI..."
         case .stopping: return "Зупинка запису..."
@@ -174,7 +175,7 @@ struct RecordingView: View {
     private var statusForState: MeetingStatus {
         switch viewModel.state {
         case .recording: return .recording
-        case .preparing, .transcribing, .stopping: return .transcribing
+        case .preparing, .extracting, .transcribing, .stopping: return .transcribing
         case .summarizing: return .summarizing
         case .complete: return .complete
         case .error: return .error

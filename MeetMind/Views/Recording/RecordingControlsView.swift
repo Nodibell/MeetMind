@@ -293,6 +293,7 @@ struct RecordingControlsView: View {
         case .idle: return "Почати запис"
         case .recording: return "Зупинити"
         case .preparing: return "Підготовка..."
+        case .extracting: return "Вилучення..."
         case .stopping: return "Зупинка..."
         case .transcribing: return "Транскрипція..."
         case .summarizing: return "Аналіз..."
@@ -303,7 +304,7 @@ struct RecordingControlsView: View {
 
     private var isProcessing: Bool {
         switch viewModel.state {
-        case .preparing, .stopping, .transcribing, .summarizing: return true
+        case .preparing, .extracting, .stopping, .transcribing, .summarizing: return true
         default: return false
         }
     }
