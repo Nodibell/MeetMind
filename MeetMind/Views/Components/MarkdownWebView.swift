@@ -29,9 +29,33 @@ struct MarkdownWebView: NSViewRepresentable {
         webView.loadHTMLString(html, baseURL: nil)
     }
     
+    private func preprocessMarkdown(_ markdown: String) -> String {
+        let clean = markdown.replacingOccurrences(of: "\r", with: "")
+        let lines = clean.components(separatedBy: "\n")
+        var processedLines: [String] = []
+        
+        for i in 0..<lines.count {
+            let line = lines[i]
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            
+            if trimmed.hasPrefix("|") {
+                if i > 0 {
+                    let prevLine = processedLines.last ?? ""
+                    let prevTrimmed = prevLine.trimmingCharacters(in: .whitespaces)
+                    if !prevTrimmed.isEmpty && !prevTrimmed.hasPrefix("|") {
+                        processedLines.append("") // Guarantee newline before table
+                    }
+                }
+            }
+            processedLines.append(line)
+        }
+        
+        return processedLines.joined(separator: "\n")
+    }
+    
     private func generateHTML(from markdown: String) -> String {
-        // Escape the markdown string for JavaScript
-        let escapedMarkdown = markdown
+        let preprocessed = preprocessMarkdown(markdown)
+        let escapedMarkdown = preprocessed
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "`", with: "\\`")
             .replacingOccurrences(of: "$", with: "\\$")
@@ -158,12 +182,20 @@ struct MarkdownWebView: NSViewRepresentable {
                     border-collapse: collapse;
                     margin-bottom: 16px;
                     width: 100%;
+                    overflow: auto;
+                    display: block;
                 }
                 th, td {
-                    padding: 6px 13px;
+                    padding: 8px 13px;
                     border: 1px solid var(--border-color);
                 }
-                th { font-weight: 600; }
+                th {
+                    font-weight: 600;
+                    background-color: var(--code-bg);
+                }
+                tr:nth-child(2n) {
+                    background-color: rgba(128, 128, 128, 0.05);
+                }
                 
                 /* Selection styling */
                 ::selection {
