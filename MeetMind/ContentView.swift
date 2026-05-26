@@ -65,11 +65,14 @@ struct ContentView: View {
             .environment(\.locale, .init(identifier: AppSettings.shared.appLanguage))
         }
         // Drag-and-drop file support using onDrop (compatible with macOS Finder)
-        .onDrop(of: [.fileURL, .url], isTargeted: { isTargeted in
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isDroppingFile = isTargeted
+        .onDrop(of: [.fileURL, .url], isTargeted: Binding(
+            get: { isDroppingFile },
+            set: { newValue in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isDroppingFile = newValue
+                }
             }
-        }) { providers in
+        )) { providers in
             guard let provider = providers.first else { return false }
             
             if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {

@@ -9,12 +9,12 @@
 /* Begin PBXBuildFile section */
 		31B3A748CFDADEA68CDE40EE /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5017A4C7AE0A453E64992C44 /* Foundation.framework */; };
 		4321F5725102B5645B211094 /* AppSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65026034DB6EE24C4B3B37DE /* AppSettingsTests.swift */; };
+		4321F5725102B5645B211099 /* AdditionalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65026034DB6EE24C4B3B37DF /* AdditionalTests.swift */; };
 		4C1507582FAB90E0007C784F /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4C1507572FAB90E0007C784F /* WhisperKit */; };
 		4CBAB1FB2FB8ACB900098DEC /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = 4CBAB1FA2FB8ACB900098DEC /* MLXLLM */; };
 		4CBAB1FD2FB8ACB900098DEC /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 4CBAB1FC2FB8ACB900098DEC /* MLXLMCommon */; };
 		5C780215514CAF440FE1B77C /* LLMServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD18B9F1ACC65366B7756B10 /* LLMServiceTests.swift */; };
 		6FC550D2BE06B61E63C54ADE /* MeetMindIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FC550D1BE06B61E63C54ADE /* MeetMindIntegrationTests.swift */; };
-		4321F5725102B5645B211099 /* AdditionalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65026034DB6EE24C4B3B37DF /* AdditionalTests.swift */; };
 		EBFCFF4796D7061B0C2285F6 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = D6AC83B81297D9491D198D6A /* FluidAudio */; };
 /* End PBXBuildFile section */
 
@@ -32,8 +32,8 @@
 		4CDCD3462FAB7C4900DCA3CB /* MeetMind.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MeetMind.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5017A4C7AE0A453E64992C44 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		65026034DB6EE24C4B3B37DE /* AppSettingsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppSettingsTests.swift; sourceTree = "<group>"; };
-		6FC550D1BE06B61E63C54ADE /* MeetMindIntegrationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeetMindIntegrationTests.swift; sourceTree = "<group>"; };
 		65026034DB6EE24C4B3B37DF /* AdditionalTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AdditionalTests.swift; sourceTree = "<group>"; };
+		6FC550D1BE06B61E63C54ADE /* MeetMindIntegrationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeetMindIntegrationTests.swift; sourceTree = "<group>"; };
 		9A3400E9346BBAF29EA982B5 /* MeetMindTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MeetMindTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FD18B9F1ACC65366B7756B10 /* LLMServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LLMServiceTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -398,7 +398,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeetMind/MeetMind.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 25;
+				CURRENT_PROJECT_VERSION = 26;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 72UFS7AJ5R;
 				ENABLE_APP_SANDBOX = YES;
@@ -417,7 +417,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.5;
-				MARKETING_VERSION = 1.3.6.1;
+				MARKETING_VERSION = 1.3.6.2;
 				PRODUCT_BUNDLE_IDENTIFIER = oleksii.chumak.MeetMind;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -438,7 +438,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeetMind/MeetMind.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 25;
+				CURRENT_PROJECT_VERSION = 26;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 72UFS7AJ5R;
 				ENABLE_APP_SANDBOX = YES;
@@ -457,7 +457,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.5;
-				MARKETING_VERSION = 1.3.6.1;
+				MARKETING_VERSION = 1.3.6.2;
 				PRODUCT_BUNDLE_IDENTIFIER = oleksii.chumak.MeetMind;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
