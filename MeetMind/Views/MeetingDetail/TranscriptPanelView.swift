@@ -19,6 +19,7 @@ struct TranscriptPanelView: View {
     var isTranscribing: Bool = false
     var transcriptionProgress: Double = 0.0
     var transcriptionStatusText: String = ""
+    var audioURL: URL? = nil
     var onClearTranslation: (() -> Void)? = nil
     var onUpdateSpeakerName: ((String, String) -> Void)? = nil
     var onUpdateSpeakerColor: ((String, Color) -> Void)? = nil
@@ -125,6 +126,14 @@ struct TranscriptPanelView: View {
                     }
                     
                     transcriptContent
+                    
+                    if let audioURL {
+                        AudioPlayerBar(audioURL: audioURL)
+                            .padding(.horizontal, Theme.Spacing.lg)
+                            .padding(.bottom, Theme.Spacing.md)
+                            .padding(.top, Theme.Spacing.xs)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                 }
             }
         }
@@ -132,6 +141,25 @@ struct TranscriptPanelView: View {
     }
     
     // MARK: - Content
+    
+    private var activeSegmentID: UUID? {
+        let time = AudioPlaybackManager.shared.currentTime
+        return segments.first(where: { time >= $0.startTime && time <= $0.endTime })?.id
+    }
+    
+    private func isSegmentActive(_ segment: MeetingTranscriptSegment) -> Bool {
+        if segment.id == highlightedSegmentID {
+            return true
+        }
+        
+        let playbackManager = AudioPlaybackManager.shared
+        if playbackManager.isPlaying || playbackManager.currentTime > 0 {
+            let time = playbackManager.currentTime
+            return time >= segment.startTime && time <= segment.endTime
+        }
+        
+        return false
+    }
     
     private var transcriptContent: some View {
         ScrollViewReader { proxy in
@@ -141,7 +169,7 @@ struct TranscriptPanelView: View {
                         TranscriptDetailRow(
                             segment: segment,
                             translatedText: translatedSegments[segment.id],
-                            isHighlighted: segment.id == highlightedSegmentID,
+                            isHighlighted: isSegmentActive(segment),
                             searchText: searchText,
                             metadata: speakerMetadata.first(where: { $0.id == segment.speakerID }),
                             onUpdateName: { newName in
@@ -157,6 +185,11 @@ struct TranscriptPanelView: View {
                         )
                         .id(segment.id)
                         .onTapGesture {
+                            if let audioURL {
+                                AudioPlaybackManager.shared.load(url: audioURL)
+                                AudioPlaybackManager.shared.seek(to: segment.startTime)
+                                AudioPlaybackManager.shared.play()
+                            }
                             withAnimation(Theme.Animation.fast) {
                                 highlightedSegmentID = segment.id
                             }
@@ -168,6 +201,13 @@ struct TranscriptPanelView: View {
                     }
                 }
                 .padding(.vertical, Theme.Spacing.sm)
+            }
+            .onChange(of: activeSegmentID) { _, newID in
+                if let newID, AudioPlaybackManager.shared.isPlaying {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        proxy.scrollTo(newID, anchor: .center)
+                    }
+                }
             }
         }
     }
@@ -348,6 +388,92 @@ struct TranscriptDetailRow: View {
     }
 }
 
+// MARK: - Premium Audio Player Bar
+
+struct AudioPlayerBar: View {
+    let audioURL: URL
+    @State private var playbackManager = AudioPlaybackManager.shared
+    @State private var isScrubbing = false
+    @State private var dragProgress: Double = 0
+    
+    var body: some View {
+        HStack(spacing: Theme.Spacing.md) {
+            // Play/Pause Button
+            Button(action: {
+                playbackManager.load(url: audioURL)
+                if playbackManager.isPlaying {
+                    playbackManager.pause()
+                } else {
+                    playbackManager.play()
+                }
+            }) {
+                Image(systemName: playbackManager.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 32, height: 32)
+                    .background(Theme.Colors.accentPrimary)
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            
+            // Current Time
+            Text(playbackManager.currentTime.formattedTimestamp)
+                .font(Theme.Typography.monoCaption)
+                .foregroundStyle(Theme.Colors.textSecondary)
+                .frame(width: 40, alignment: .trailing)
+            
+            // Timeline scrubber track
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Theme.Colors.borderSubtle.opacity(0.4))
+                        .frame(height: 6)
+                    
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Theme.Colors.accentPrimary)
+                        .frame(width: geo.size.width * (isScrubbing ? dragProgress : playbackManager.progress), height: 6)
+                    
+                    Circle()
+                        .fill(.white)
+                        .frame(width: 12, height: 12)
+                        .shadow(radius: 1)
+                        .offset(x: (geo.size.width - 12) * (isScrubbing ? dragProgress : playbackManager.progress))
+                }
+                .frame(maxHeight: .infinity)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            isScrubbing = true
+                            let ratio = max(0, min(1, value.location.x / geo.size.width))
+                            dragProgress = ratio
+                        }
+                        .onEnded { value in
+                            let ratio = max(0, min(1, value.location.x / geo.size.width))
+                            playbackManager.load(url: audioURL)
+                            playbackManager.seek(to: ratio * playbackManager.duration)
+                            isScrubbing = false
+                        }
+                )
+            }
+            .frame(height: 20)
+            
+            // Duration Time
+            Text(playbackManager.duration.formattedTimestamp)
+                .font(Theme.Typography.monoCaption)
+                .foregroundStyle(Theme.Colors.textTertiary)
+                .frame(width: 40, alignment: .leading)
+        }
+        .padding(.horizontal, Theme.Spacing.md)
+        .padding(.vertical, Theme.Spacing.sm)
+        .background(Theme.Colors.surfacePrimary.opacity(0.4))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.CornerRadius.md))
+        .overlay(RoundedRectangle(cornerRadius: Theme.CornerRadius.md).stroke(Theme.Colors.border.opacity(0.1), lineWidth: 0.5))
+        .onAppear {
+            playbackManager.load(url: audioURL)
+        }
+    }
+}
 
 #Preview {
     TranscriptPanelView(segments: [MeetingTranscriptSegment(startTime: TimeInterval(1095), endTime: TimeInterval(1100), text: "Hello!, This is the showcase!")], searchText: .constant("Searching"))

@@ -534,9 +534,9 @@ final class AudioManager: NSObject, AudioProvider, @unchecked Sendable {
         config.channelCount = Int(Constants.whisperChannelCount)
         config.excludesCurrentProcessAudio = true
 
-        // Enable microphone capture on macOS 15+ to support mixed system+mic recording
+        // Enable microphone capture on macOS 15+ ONLY if in mixed system+microphone recording mode
         if #available(macOS 15.0, *) {
-            config.captureMicrophone = true
+            config.captureMicrophone = (audioSource == .mixed)
         }
 
         config.width = 2

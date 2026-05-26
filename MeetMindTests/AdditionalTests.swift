@@ -61,3 +61,40 @@ final class OnboardingViewModelTests: XCTestCase {
         XCTAssertFalse(supportedExtensions.contains("png"))
     }
 }
+
+final class AudioPlaybackTests: XCTestCase {
+    
+    func testTimeIntervalFormatting() {
+        let oneSecond: TimeInterval = 1
+        let tenSeconds: TimeInterval = 10.5
+        let fiveMinutes: TimeInterval = 300
+        let hour: TimeInterval = 3600
+        
+        XCTAssertEqual(oneSecond.formattedTimestamp, "00:01")
+        XCTAssertEqual(tenSeconds.formattedTimestamp, "00:10")
+        XCTAssertEqual(fiveMinutes.formattedTimestamp, "05:00")
+        XCTAssertEqual(hour.formattedTimestamp, "60:00")
+    }
+    
+    func testSegmentHighlightingLookup() {
+        let segments = [
+            MeetingTranscriptSegment(startTime: 0, endTime: 5, text: "First segment"),
+            MeetingTranscriptSegment(startTime: 5.1, endTime: 10, text: "Second segment"),
+            MeetingTranscriptSegment(startTime: 10.1, endTime: 15, text: "Third segment")
+        ]
+        
+        // Find segment at t = 2.5
+        let segment1 = segments.first(where: { 2.5 >= $0.startTime && 2.5 <= $0.endTime })
+        XCTAssertNotNil(segment1)
+        XCTAssertEqual(segment1?.text, "First segment")
+        
+        // Find segment at t = 7.0
+        let segment2 = segments.first(where: { 7.0 >= $0.startTime && 7.0 <= $0.endTime })
+        XCTAssertNotNil(segment2)
+        XCTAssertEqual(segment2?.text, "Second segment")
+        
+        // Find segment at t = 18.0 (out of bounds)
+        let segment3 = segments.first(where: { 18.0 >= $0.startTime && 18.0 <= $0.endTime })
+        XCTAssertNil(segment3)
+    }
+}

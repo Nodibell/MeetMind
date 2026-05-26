@@ -56,6 +56,7 @@ struct MeetingDetailView: View {
                     isTranscribing: viewModel.isTranscribing,
                     transcriptionProgress: viewModel.transcriptionProgressValue,
                     transcriptionStatusText: viewModel.transcriptionStatusText,
+                    audioURL: viewModel.meeting.audioURL,
                     onClearTranslation: {
                         viewModel.translatedTranscript = nil
                         viewModel.translatedSegments = [:]
@@ -109,6 +110,9 @@ struct MeetingDetailView: View {
         .task {
             viewModel.setModelContext(modelContext)
             await viewModel.loadData()
+        }
+        .onDisappear {
+            AudioPlaybackManager.shared.reset()
         }
     }
     
