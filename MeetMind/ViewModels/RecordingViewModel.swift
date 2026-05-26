@@ -78,10 +78,23 @@ final class RecordingViewModel {
     }
 
     func refreshSystemAudioSources(forcePrompt: Bool = false) {
-        // ScreenCaptureKit (SCShareableContent) handles Screen Recording permissions
-        // natively — no CGPreflightScreenCaptureAccess guard needed.
-        // The OS will prompt once automatically on first use.
-        // If the user denied, SCShareableContent throws an error which is caught below.
+        if forcePrompt {
+            let alreadyGranted = CGPreflightScreenCaptureAccess()
+            if !alreadyGranted {
+                let granted = CGRequestScreenCaptureAccess()
+                if !granted && !CGPreflightScreenCaptureAccess() {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_ScreenCapture") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+            }
+        }
+
+        guard CGPreflightScreenCaptureAccess() else {
+            AppLogger.warning("Screen Recording permission not granted. Skipping system audio sources query in main view model.")
+            return
+        }
+
         Task {
             do {
                 let sources = try await audioManager.getAvailableSystemAudioSources()
@@ -89,16 +102,7 @@ final class RecordingViewModel {
                     self.availableSystemAudioSources = sources
                 }
             } catch {
-                AppLogger.warning("Failed to fetch system audio sources (permission may be pending): \(error)")
-                // If sources failed to load and forcePrompt is requested,
-                // open System Settings so the user can grant access.
-                if forcePrompt {
-                    await MainActor.run {
-                        if let url = URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_ScreenCapture") {
-                            NSWorkspace.shared.open(url)
-                        }
-                    }
-                }
+                AppLogger.warning("Failed to fetch system audio sources: \(error)")
             }
         }
     }
@@ -154,6 +158,26 @@ final class RecordingViewModel {
 
     func startRecording() {
         guard state == .idle || state == .complete || isErrorState else { return }
+
+        // Guard: Screen Recording permission is required for System/Mixed audio sources
+        if audioManager.audioSource == .system || audioManager.audioSource == .mixed {
+            let alreadyGranted = CGPreflightScreenCaptureAccess()
+            if !alreadyGranted {
+                // Request access explicitly to show the system dialog
+                let granted = CGRequestScreenCaptureAccess()
+                if !granted && !CGPreflightScreenCaptureAccess() {
+                    let alertMessage = String(localized: "Для запису системного звуку необхідно надати доступ до запису екрану в Системних параметрах.")
+                    self.state = .error(alertMessage)
+                    self.errorMessage = alertMessage
+                    
+                    // Direct redirect to the privacy pane
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_ScreenCapture") {
+                        NSWorkspace.shared.open(url)
+                    }
+                    return
+                }
+            }
+        }
 
         errorMessage = nil
         liveTranscript = []
