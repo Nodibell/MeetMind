@@ -12,6 +12,8 @@ final class OnboardingViewModel: @unchecked Sendable {
     var screenPermission = false
     var downloadProgress: Double = 0.0
     var isDownloading = false
+    var isModelLoading = false
+    var errorMessage: String? = nil
     
     init(transcriptionService: any TranscriptionProvider) {
         self.transcriptionService = transcriptionService
@@ -94,17 +96,25 @@ final class OnboardingViewModel: @unchecked Sendable {
             case .downloading(let progress):
                 self.downloadProgress = progress
                 self.isDownloading = true
+                self.isModelLoading = false
+                self.errorMessage = nil
                 self.subscribeToStateChanges()
             case .loading:
-                self.downloadProgress = 0.95
-                self.isDownloading = true
+                self.downloadProgress = 0.99
+                self.isDownloading = false
+                self.isModelLoading = true
+                self.errorMessage = nil
                 self.subscribeToStateChanges()
             case .ready:
                 self.downloadProgress = 1.0
                 self.isDownloading = false
-            case .error(_):
+                self.isModelLoading = false
+                self.errorMessage = nil
+            case .error(let error):
                 self.downloadProgress = 0.0
                 self.isDownloading = false
+                self.isModelLoading = false
+                self.errorMessage = error
             default:
                 break
             }
@@ -121,14 +131,23 @@ final class OnboardingViewModel: @unchecked Sendable {
                     case .downloading(let progress):
                         self.downloadProgress = progress
                         self.isDownloading = true
+                        self.isModelLoading = false
+                        self.errorMessage = nil
                     case .loading:
-                        self.downloadProgress = 0.95
-                        self.isDownloading = true
+                        self.downloadProgress = 0.99
+                        self.isDownloading = false
+                        self.isModelLoading = true
+                        self.errorMessage = nil
                     case .ready:
                         self.downloadProgress = 1.0
                         self.isDownloading = false
+                        self.isModelLoading = false
+                        self.errorMessage = nil
                     case .error(let errorMsg):
+                        self.downloadProgress = 0.0
                         self.isDownloading = false
+                        self.isModelLoading = false
+                        self.errorMessage = errorMsg
                         AppLogger.error("Error downloading model in onboarding: \(errorMsg)")
                     default:
                         break
@@ -239,13 +258,21 @@ struct OnboardingView: View {
                 ProgressView(value: viewModel.downloadProgress)
                     .progressViewStyle(.linear)
                 
-                Text(viewModel.downloadProgress, format: .percent)
+                Text(viewModel.downloadProgress.rounded(), format: .percent)
                     .font(.caption)
                     .monospacedDigit()
             }
             .padding(.horizontal, 40)
             
-            if !viewModel.isDownloading && viewModel.downloadProgress < 1.0 {
+            if let error = viewModel.errorMessage {
+                Text(error)
+                    .foregroundColor(.red)
+                    .font(.caption)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
+            
+            if !viewModel.isDownloading && !viewModel.isModelLoading && viewModel.downloadProgress < 1.0 {
                 Button("Почати завантаження") {
                     viewModel.startModelDownload()
                 }
@@ -254,8 +281,14 @@ struct OnboardingView: View {
                 Text("Завантаження моделі з Hugging Face...")
                     .foregroundColor(.secondary)
                     .font(.caption)
+            } else if viewModel.isModelLoading {
+                Text("Завантаження завершено. Ініціалізація та оптимізація моделі Whisper (це може зайняти 1-2 хвилини)...")
+                    .foregroundColor(.orange)
+                    .font(.caption)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
             } else if viewModel.downloadProgress >= 1.0 {
-                Text("Завантаження завершено")
+                Text("Завантаження та ініціалізація успішно завершені")
                     .foregroundColor(.green)
                     .font(.subheadline)
             }

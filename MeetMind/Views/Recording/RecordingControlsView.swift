@@ -324,7 +324,9 @@ struct RecordingControlsView: View {
             withAnimation(.interactiveSpring(response: 0.25, dampingFraction: 0.75)) {
                 viewModel.audioManager.audioSource = source
                 if source == .system || source == .mixed {
-                    viewModel.refreshSystemAudioSources(forcePrompt: true)
+                    // Load sources silently — do NOT force a prompt here.
+                    // forcePrompt: true would open System Settings on every tap.
+                    viewModel.refreshSystemAudioSources(forcePrompt: false)
                 }
             }
         }) {

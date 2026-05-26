@@ -50,23 +50,12 @@ struct AudioExtractor {
             throw ExtractionError.failedToCreateSession
         }
         
-        exportSession.outputURL = outputURL
-        exportSession.outputFileType = .m4a
-        
-        // Export
-        await exportSession.export()
-        
-        // Check status
-        switch exportSession.status {
-        case .completed:
+        // Export using modern macOS 13+ async/await API
+        do {
+            try await exportSession.export(to: outputURL, as: .m4a)
             AppLogger.info("Successfully extracted audio from \(inputURL.lastPathComponent) to \(outputURL.lastPathComponent)")
-        case .failed:
-            let errorMsg = exportSession.error?.localizedDescription ?? String(localized: "невідома помилка")
-            throw ExtractionError.exportFailed(errorMsg)
-        case .cancelled:
-            throw ExtractionError.exportFailed(String(localized: "експорт скасовано"))
-        default:
-            throw ExtractionError.exportFailed(String(localized: "невідомий статус експорту"))
+        } catch {
+            throw ExtractionError.exportFailed(error.localizedDescription)
         }
     }
 }

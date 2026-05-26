@@ -62,21 +62,36 @@ struct ContentView: View {
                 UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
                 recordingVM?.refreshSystemAudioSources(forcePrompt: false)
             }
+            .environment(\.locale, .init(identifier: AppSettings.shared.appLanguage))
         }
-        // Drag-and-drop file support
-        .dropDestination(for: URL.self) { urls, _ in
-            guard let url = urls.first else { return false }
-            let supportedExtensions: Set<String> = ["wav", "mp3", "m4a", "flac", "aac", "mp4", "mov", "m4v", "mkv", "avi", "caf", "opus", "ogg"]
-            guard supportedExtensions.contains(url.pathExtension.lowercased()) else { return false }
-            router.startNewRecording()
-            Task {
-                await recordingVM?.processImportedFile(at: url)
-            }
-            return true
-        } isTargeted: { isTargeted in
+        // Drag-and-drop file support using onDrop (compatible with macOS Finder)
+        .onDrop(of: [.fileURL, .url], isTargeted: { isTargeted in
             withAnimation(.easeInOut(duration: 0.2)) {
                 isDroppingFile = isTargeted
             }
+        }) { providers in
+            guard let provider = providers.first else { return false }
+            
+            if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+                provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, error in
+                    if let data = item as? Data {
+                        if let url = URL(dataRepresentation: data, relativeTo: nil) {
+                            handleDroppedFile(at: url)
+                        }
+                    } else if let url = item as? URL {
+                        handleDroppedFile(at: url)
+                    }
+                }
+                return true
+            } else if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
+                provider.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { item, error in
+                    if let url = item as? URL {
+                        handleDroppedFile(at: url)
+                    }
+                }
+                return true
+            }
+            return false
         }
         .overlay {
             if isDroppingFile {
@@ -87,7 +102,7 @@ struct ContentView: View {
                         Image(systemName: "arrow.down.circle.fill")
                             .font(.system(size: 56))
                             .foregroundStyle(.white)
-                        Text("Drop to transcribe")
+                        Text("Перетягніть для транскрипції")
                             .font(.title2.bold())
                             .foregroundStyle(.white)
                     }
@@ -309,6 +324,16 @@ struct ContentView: View {
         router.startNewRecording()
         
         Task {
+            await recordingVM?.processImportedFile(at: url)
+        }
+    }
+
+    private func handleDroppedFile(at url: URL) {
+        let supportedExtensions: Set<String> = ["wav", "mp3", "m4a", "flac", "aac", "mp4", "mov", "m4v", "mkv", "avi", "caf", "opus", "ogg"]
+        guard supportedExtensions.contains(url.pathExtension.lowercased()) else { return }
+        
+        Task { @MainActor in
+            router.startNewRecording()
             await recordingVM?.processImportedFile(at: url)
         }
     }

@@ -78,23 +78,10 @@ final class RecordingViewModel {
     }
 
     func refreshSystemAudioSources(forcePrompt: Bool = false) {
-        if forcePrompt {
-            let alreadyGranted = CGPreflightScreenCaptureAccess()
-            if !alreadyGranted {
-                let granted = CGRequestScreenCaptureAccess()
-                if !granted && !CGPreflightScreenCaptureAccess() {
-                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
-                        NSWorkspace.shared.open(url)
-                    }
-                }
-            }
-        }
-        
-        guard CGPreflightScreenCaptureAccess() else {
-            AppLogger.warning("Screen Recording permission not granted. Skipping system audio sources query.")
-            return
-        }
-
+        // ScreenCaptureKit (SCShareableContent) handles Screen Recording permissions
+        // natively — no CGPreflightScreenCaptureAccess guard needed.
+        // The OS will prompt once automatically on first use.
+        // If the user denied, SCShareableContent throws an error which is caught below.
         Task {
             do {
                 let sources = try await audioManager.getAvailableSystemAudioSources()
@@ -102,7 +89,16 @@ final class RecordingViewModel {
                     self.availableSystemAudioSources = sources
                 }
             } catch {
-                AppLogger.error("Failed to fetch system audio sources: \(error)")
+                AppLogger.warning("Failed to fetch system audio sources (permission may be pending): \(error)")
+                // If sources failed to load and forcePrompt is requested,
+                // open System Settings so the user can grant access.
+                if forcePrompt {
+                    await MainActor.run {
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_ScreenCapture") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                }
             }
         }
     }
