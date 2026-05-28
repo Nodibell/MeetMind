@@ -48,7 +48,9 @@ final class PersistenceController {
         SpeakerProfile.self,
         TranscriptSegment.self,
         ActionItem.self,
-        Decision.self
+        Decision.self,
+        MeetingGroup.self,
+        VectorEmbeddingEntity.self
     ])
 
     private static var storeURL: URL {
