@@ -38,6 +38,12 @@
 - Whisper Models (downloaded automatically on first run)
 
 ### Installation
+
+#### Option 1: Quick Install (Recommended)
+1. Download the latest packaged release disk image: **[MeetMind_v1.3.7.1.dmg](https://github.com/Nodibell/MeetMind/releases/download/v1.3.7.1/MeetMind_v1.3.7.1.dmg)**.
+2. Open the `.dmg` file and drag **MeetMind** to your **Applications** folder.
+
+#### Option 2: Build from Source
 1. Clone the repository:
    ```bash
    git clone https://github.com/Nodibell/MeetMind.git
