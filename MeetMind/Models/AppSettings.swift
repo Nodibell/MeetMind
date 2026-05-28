@@ -35,6 +35,7 @@ final class AppSettings: @unchecked Sendable {
         static let lmStudioEndpoint         = "lmStudioEndpoint"
         static let deepMLXModelPath         = "deepMLXModelPath"
         static let customSummaryPrompt      = "customSummaryPrompt"
+        static let llmEmbeddingModel        = "llmEmbeddingModel"
         static let whisperModelLive         = "whisperModelLive"
         static let whisperModelPost         = "whisperModelPost"
         static let watchFolderPath          = "watchFolderPath"
@@ -172,6 +173,10 @@ final class AppSettings: @unchecked Sendable {
         didSet { UserDefaults.standard.set(customSummaryPrompt, forKey: Keys.customSummaryPrompt) }
     }
 
+    var llmEmbeddingModel: String {
+        didSet { UserDefaults.standard.set(llmEmbeddingModel, forKey: Keys.llmEmbeddingModel) }
+    }
+
     /// Security-scoped URL to the selected DeepMLX model folder
     var deepMLXModelPath: URL? {
         didSet { saveBookmark(deepMLXModelPath, forKey: Keys.deepMLXModelPath) }
@@ -253,6 +258,7 @@ final class AppSettings: @unchecked Sendable {
         lmStudioEndpoint        = UserDefaults.standard.string(forKey: Keys.lmStudioEndpoint) ?? Constants.defaultLMStudioEndpoint
         
         customSummaryPrompt     = UserDefaults.standard.string(forKey: Keys.customSummaryPrompt) ?? ""
+        llmEmbeddingModel       = UserDefaults.standard.string(forKey: Keys.llmEmbeddingModel) ?? "nomic-embed-text"
         llmModelUnloadTimeout   = UserDefaults.standard.object(forKey: Keys.llmModelUnloadTimeout) as? Int ?? 60
         enableSharding          = UserDefaults.standard.object(forKey: "enableSharding") as? Bool ?? true
         enablePrefetch          = UserDefaults.standard.object(forKey: "enablePrefetch") as? Bool ?? true

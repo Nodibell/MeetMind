@@ -252,6 +252,24 @@ struct SettingsView: View {
                             .foregroundStyle(.orange)
                     }
                 }
+
+                Section("Модель Ембедингів (RAG)") {
+                    if viewModel.availableModels.isEmpty {
+                        TextField("Модель Ембедингів", text: $viewModel.settings.llmEmbeddingModel)
+                    } else {
+                        Picker("Модель Ембедингів", selection: $viewModel.settings.llmEmbeddingModel) {
+                            ForEach(viewModel.availableModels, id: \.self) { model in
+                                Text(model).tag(model)
+                            }
+                            if !viewModel.availableModels.contains(viewModel.settings.llmEmbeddingModel) && !viewModel.settings.llmEmbeddingModel.isEmpty {
+                                Text("\(viewModel.settings.llmEmbeddingModel) (custom)").tag(viewModel.settings.llmEmbeddingModel)
+                            }
+                        }
+                    }
+                    Text("Використовується для векторизації нарад. Рекомендовано: nomic-embed-text або bge-small-en.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("Керування пам'яттю (VRAM / RAM)") {
