@@ -58,6 +58,7 @@ final class Meeting {
     @Relationship(deleteRule: .cascade) var transcriptSegments: [TranscriptSegment] = []
     @Relationship(deleteRule: .cascade) var actionItems: [ActionItem] = []
     @Relationship(deleteRule: .cascade) var decisions: [Decision] = []
+    @Relationship var groups: [MeetingGroup] = []
     
     var status: MeetingStatus {
         get { MeetingStatus(rawValue: statusRaw) ?? .error }

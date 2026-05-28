@@ -21,7 +21,9 @@ final class MeetMindIntegrationTests: XCTestCase {
             SpeakerProfile.self,
             TranscriptSegment.self,
             ActionItem.self,
-            Decision.self
+            Decision.self,
+            MeetingGroup.self,
+            VectorEmbeddingEntity.self
         ])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         container = try ModelContainer(for: schema, configurations: [config])
