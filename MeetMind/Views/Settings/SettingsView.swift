@@ -21,7 +21,7 @@ struct SettingsView: View {
                 audioTab
             }
 
-            Tab("AI / Ollama", systemImage: "brain.head.profile") {
+            Tab("AI", systemImage: "brain.head.profile") {
                 ollamaTab
             }
 
