@@ -1,4 +1,3 @@
-
 import SwiftUI
 import SwiftData
 
@@ -49,7 +48,7 @@ struct GlobalSearchView: View {
                 Text("Глобальний запит")
                     .font(Theme.Typography.title2)
                     .foregroundStyle(Theme.Colors.textPrimary)
-                Text(String(localized: "Аналіз по всіх ваших нарад \(allMeetings.count)"))
+                Text("Аналіз усіх ваших нарад (\(allMeetings.count))")
                     .font(Theme.Typography.caption)
                     .foregroundStyle(Theme.Colors.textTertiary)
             }
@@ -61,40 +60,104 @@ struct GlobalSearchView: View {
     }
     
     private var welcomeState: some View {
-        VStack(spacing: Theme.Spacing.lg) {
-            Label("Глобальний запит", systemImage: "magnifyingglass")
-                .font(.system(size: 48))
-                .foregroundStyle(Theme.Colors.accentPrimary)
-                .overlay(
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 24))
-                        .offset(x: 20, y: -20)
-                )
+        VStack(spacing: Theme.Spacing.xl) {
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Theme.Colors.accentPrimary.opacity(0.15),
+                                Theme.Colors.accentSecondary.opacity(0.05)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 80, height: 80)
+                
+                Image(systemName: "magnifyingglass.circle.fill")
+                    .font(.system(size: 48))
+                    .foregroundStyle(Theme.Gradients.accent)
+                
+                Image(systemName: "sparkles")
+                    .font(.system(size: 18))
+                    .foregroundStyle(Theme.Colors.accentSecondary)
+                    .offset(x: 22, y: -22)
+            }
             
-            Text("Запитайте що завгодно")
-                .font(Theme.Typography.title3)
+            VStack(spacing: Theme.Spacing.xs) {
+                Text("Запитайте що завгодно")
+                    .font(Theme.Typography.title)
+                    .foregroundStyle(Theme.Colors.textPrimary)
+                
+                Text("Я можу проаналізувати всі ваші наради і знайти відповіді на будь-яке запитання.")
+                    .font(Theme.Typography.body)
+                    .foregroundStyle(Theme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
             
-            Text("Я можу проаналізувати всі ваші наради і знайти відповіді на запитання на кшталт:\n• «Які рішення по бюджету ми приймали в квітні?»\n• «Хто відповідальний за проект X?»\n• «Зроби зведення всіх завдань за тиждень»")
-                .font(Theme.Typography.body)
-                .foregroundStyle(Theme.Colors.textSecondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
+            VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+                Text("СПРОБУЙТЕ ЗАПИТАТИ:")
+                    .font(Theme.Typography.captionMedium)
+                    .foregroundStyle(Theme.Colors.textTertiary)
+                    .tracking(1)
+                    .padding(.leading, 4)
+                
+                SuggestionCard(text: "Які рішення щодо бюджету було прийнято у квітні?") {
+                    query = "Які рішення щодо бюджету було прийнято у квітні?"
+                }
+                
+                SuggestionCard(text: "Хто відповідальний за проєкт X?") {
+                    query = "Хто відповідальний за проєкт X?"
+                }
+                
+                SuggestionCard(text: "Створи зведення всіх завдань за тиждень") {
+                    query = "Створи зведення всіх завдань за тиждень"
+                }
+            }
+            .frame(maxWidth: 420)
+            .padding(.top, Theme.Spacing.md)
         }
-        .padding(.top, 60)
+        .padding(.top, 40)
     }
     
     private var chatSection: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
             ForEach(chatHistory) { message in
-                ChatBubble(message: message)
+                ChatMessageBubbleView(
+                    role: message.role == .user ? "user" : "assistant",
+                    content: message.content,
+                    isStreaming: false
+                )
+                .avatar {
+                    Image(systemName: "brain")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.white)
+                        .frame(width: 28, height: 28)
+                        .background(Theme.Gradients.accent)
+                        .clipShape(Circle())
+                }
             }
             
             if !streamingAnswer.isEmpty {
-                ChatBubble(message: ChatMessage(role: .assistant, content: streamingAnswer))
+                ChatMessageBubbleView(
+                    role: "assistant",
+                    content: streamingAnswer,
+                    isStreaming: true
+                )
+                .avatar {
+                    Image(systemName: "brain")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.white)
+                        .frame(width: 28, height: 28)
+                        .background(Theme.Gradients.accent)
+                        .clipShape(Circle())
+                }
             }
             
             if isAnalyzing && streamingAnswer.isEmpty {
-                HStack {
+                HStack(spacing: Theme.Spacing.sm) {
                     ProgressView()
                         .controlSize(.small)
                     Text("Шукаю інформацію в нарадах...")
@@ -109,26 +172,47 @@ struct GlobalSearchView: View {
     private var searchBar: some View {
         VStack(spacing: 0) {
             Divider()
+                .background(Theme.Colors.borderSubtle)
+            
             HStack(spacing: Theme.Spacing.md) {
-                TextField("Запитайте MeetMind...", text: $query)
-                    .textFieldStyle(.plain)
-                    .font(Theme.Typography.body)
-                    .padding(Theme.Spacing.md)
-                    .background(Theme.Colors.backgroundSecondary)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .onSubmit(performQuery)
+                HStack(spacing: Theme.Spacing.xs) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.Colors.textTertiary)
+                        .padding(.leading, 4)
+                    
+                    TextField("Запитайте MeetMind...", text: $query)
+                        .textFieldStyle(.plain)
+                        .font(Theme.Typography.body)
+                        .onSubmit(performQuery)
+                }
+                .padding(.horizontal, Theme.Spacing.sm)
+                .padding(.vertical, 8)
+                .background(Theme.Colors.backgroundSecondary.opacity(0.6))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(
+                            query.isEmpty ? Theme.Colors.borderSubtle : Theme.Colors.accentPrimary.opacity(0.5),
+                            lineWidth: 1
+                        )
+                )
                 
                 Button(action: performQuery) {
                     Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 32))
+                        .font(.system(size: 28))
                         .foregroundStyle(query.isEmpty || isAnalyzing ? Theme.Colors.textTertiary : Theme.Colors.accentPrimary)
                 }
                 .buttonStyle(.plain)
                 .disabled(query.isEmpty || isAnalyzing)
             }
-            .padding(Theme.Spacing.lg)
+            .padding(.horizontal, Theme.Spacing.xxl)
+            .padding(.vertical, Theme.Spacing.md)
             .background(Theme.Colors.backgroundPrimary)
+            .frame(maxWidth: 800)
         }
+        .frame(maxWidth: .infinity)
+        .background(Theme.Colors.backgroundPrimary)
     }
     
     private func performQuery() {
@@ -141,7 +225,6 @@ struct GlobalSearchView: View {
         streamingAnswer = ""
         
         Task {
-            // Build context from all meetings
             var contexts: [String] = []
             
             do {
@@ -149,7 +232,6 @@ struct GlobalSearchView: View {
                 for meeting in allMeetings {
                     var contextText = ""
                     
-                    // 1. Add Summary (if available)
                     if let url = meeting.summaryURL,
                        fm.fileExists(atPath: url.path),
                        let summary = try? String(contentsOf: url, encoding: .utf8),
@@ -157,7 +239,6 @@ struct GlobalSearchView: View {
                         contextText += "Резюме:\n\(summary)\n"
                     }
                     
-                    // 2. Add Transcript Segments (if available)
                     if !meeting.transcriptSegments.isEmpty {
                         let sortedSegments = meeting.transcriptSegments.sorted(by: { $0.startTime < $1.startTime })
                         let transcriptText = sortedSegments.map { segment in
@@ -201,48 +282,43 @@ struct GlobalSearchView: View {
     }
 }
 
-struct ChatBubble: View {
-    let message: GlobalSearchView.ChatMessage
+// MARK: - SuggestionCard Component
+private struct SuggestionCard: View {
+    let text: String
+    let action: () -> Void
+    @State private var isHovered = false
     
     var body: some View {
-        HStack {
-            if message.role == .assistant {
-                assistantBubble
-                Spacer(minLength: 60)
-            } else {
-                Spacer(minLength: 60)
-                userBubble
-            }
-        }
-    }
-    
-    private var userBubble: some View {
-        Text(message.content)
-            .padding(Theme.Spacing.md)
-            .background(Theme.Colors.accentPrimary)
-            .foregroundStyle(.white)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-    }
-    
-    private var assistantBubble: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "brain.head.profile")
+        Button(action: action) {
+            HStack(spacing: Theme.Spacing.sm) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 11))
                     .foregroundStyle(Theme.Colors.accentPrimary)
-                Text("MeetMind AI")
-                    .font(Theme.Typography.caption.bold())
-                    .foregroundStyle(Theme.Colors.textSecondary)
+                
+                Text(text)
+                    .font(Theme.Typography.bodyMedium)
+                    .foregroundStyle(Theme.Colors.textPrimary)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(2)
+                
+                Spacer()
+                
+                Image(systemName: "arrow.right.circle.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(isHovered ? Theme.Colors.accentPrimary : Theme.Colors.textTertiary)
+                    .padding(.trailing, 2)
             }
-            
-            MarkdownWebView(markdown: message.content)
-                .frame(minHeight: 40)
+            .padding(.horizontal, Theme.Spacing.md)
+            .padding(.vertical, Theme.Spacing.sm)
+            .background(isHovered ? Theme.Colors.surfaceHover.opacity(0.8) : Theme.Colors.surfacePrimary.opacity(0.4))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isHovered ? Theme.Colors.accentPrimary.opacity(0.3) : Theme.Colors.borderSubtle.opacity(0.2), lineWidth: 1)
+            )
+            .themeShadow(isHovered ? Theme.Shadows.sm : Theme.Shadows.sm)
         }
-        .padding(Theme.Spacing.md)
-        .background(Theme.Colors.backgroundSecondary)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Theme.Colors.borderSubtle, lineWidth: 1)
-        )
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
     }
 }

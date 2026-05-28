@@ -50,7 +50,9 @@ final class PersistenceController {
         ActionItem.self,
         Decision.self,
         MeetingGroup.self,
-        VectorEmbeddingEntity.self
+        VectorEmbeddingEntity.self,
+        GroupChatMessageEntity.self,
+        GroupChatSessionEntity.self
     ])
 
     private static var storeURL: URL {

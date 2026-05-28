@@ -7,6 +7,9 @@
 
 import SwiftUI
 import SwiftData
+#if canImport(Translation)
+import Translation
+#endif
 
 /// Post-recording split view: transcript on left, summary on right
 struct MeetingDetailView: View {
@@ -16,6 +19,10 @@ struct MeetingDetailView: View {
     @State private var tagInput: String = ""
     @State private var showTagInput = false
     @State private var selectedRightTab: Int = 0
+    
+    #if canImport(Translation)
+    @State private var translationConfig: Any? = nil
+    #endif
     
     var body: some View {
         VStack(spacing: 0) {
@@ -111,6 +118,14 @@ struct MeetingDetailView: View {
             viewModel.setModelContext(modelContext)
             await viewModel.loadData()
         }
+        #if canImport(Translation)
+        .translationTask(translationConfig as? TranslationSession.Configuration) { session in
+            Task {
+                await viewModel.translateTranscriptWithAppleTranslation(session: session)
+                translationConfig = nil
+            }
+        }
+        #endif
         .onDisappear {
             AudioPlaybackManager.shared.reset()
         }
@@ -192,8 +207,20 @@ struct MeetingDetailView: View {
     private var translationMenu: some View {
         Menu {
             ForEach(AppSettings.supportedLanguages.filter { $0.code != "auto" }, id: \.code) { lang in
-                Button(lang.name) {
-                    Task { await viewModel.translateTranscript(to: lang.name) }
+                Menu(lang.name) {
+                    Button("Локальний LLM (Ollama/MLX)") {
+                        Task { await viewModel.translateTranscript(to: lang.name) }
+                    }
+                    
+                    #if canImport(Translation)
+                    if #available(macOS 15.0, *) {
+                        Button("Apple Intelligence (офлайн)") {
+                            let sourceLang = Locale.Language(languageCode: Locale.LanguageCode(viewModel.meeting.language))
+                            let targetLang = Locale.Language(languageCode: Locale.LanguageCode(lang.code))
+                            translationConfig = TranslationSession.Configuration(source: sourceLang, target: targetLang)
+                        }
+                    }
+                    #endif
                 }
             }
         } label: {

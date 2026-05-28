@@ -9,7 +9,7 @@ import Foundation
 import Accelerate
 
 /// A lightweight, Sendable struct representing a vector embedding item in memory
-struct VectorItem: Sendable {
+struct VectorItem: Sendable, Codable {
     let id: UUID
     let meetingID: UUID
     let segmentID: UUID?
@@ -36,7 +36,7 @@ struct VectorItem: Sendable {
 
 /// Native Cosine Similarity calculator powered by Apple's Accelerate framework
 enum VectorMath {
-    static func cosineSimilarity(_ a: [Float], _ b: [Float]) -> Float {
+    nonisolated static func cosineSimilarity(_ a: [Float], _ b: [Float]) -> Float {
         guard a.count == b.count, !a.isEmpty else { return 0.0 }
         let count = a.count
         
@@ -60,6 +60,7 @@ enum VectorMath {
 
 /// Actor representing high-performance local vector index matcher
 actor VectorStore {
+    init() {}
     
     struct SearchResult: Sendable {
         let item: VectorItem

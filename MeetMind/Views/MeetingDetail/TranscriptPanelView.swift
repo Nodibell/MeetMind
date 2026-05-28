@@ -20,6 +20,7 @@ struct TranscriptPanelView: View {
     var transcriptionProgress: Double = 0.0
     var transcriptionStatusText: String = ""
     var audioURL: URL? = nil
+    var initialHighlightedSegmentID: UUID? = nil
     var onClearTranslation: (() -> Void)? = nil
     var onUpdateSpeakerName: ((String, String) -> Void)? = nil
     var onUpdateSpeakerColor: ((String, Color) -> Void)? = nil
@@ -138,6 +139,11 @@ struct TranscriptPanelView: View {
             }
         }
         .background(Theme.Colors.backgroundSecondary.opacity(0.3))
+        .onAppear {
+            if let initialHighlightedSegmentID {
+                highlightedSegmentID = initialHighlightedSegmentID
+            }
+        }
     }
     
     // MARK: - Content
@@ -201,6 +207,22 @@ struct TranscriptPanelView: View {
                     }
                 }
                 .padding(.vertical, Theme.Spacing.sm)
+            }
+            .onAppear {
+                if let initialHighlightedSegmentID {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        withAnimation(.easeInOut(duration: 0.5)) {
+                            proxy.scrollTo(initialHighlightedSegmentID, anchor: .center)
+                        }
+                    }
+                }
+            }
+            .onChange(of: highlightedSegmentID) { _, newID in
+                if let newID {
+                    withAnimation(.easeInOut(duration: 0.5)) {
+                        proxy.scrollTo(newID, anchor: .center)
+                    }
+                }
             }
             .onChange(of: activeSegmentID) { _, newID in
                 if let newID, AudioPlaybackManager.shared.isPlaying {

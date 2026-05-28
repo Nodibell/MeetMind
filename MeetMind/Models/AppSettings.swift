@@ -36,6 +36,7 @@ final class AppSettings: @unchecked Sendable {
         static let deepMLXModelPath         = "deepMLXModelPath"
         static let customSummaryPrompt      = "customSummaryPrompt"
         static let llmEmbeddingModel        = "llmEmbeddingModel"
+        static let llmEmbeddingProvider     = "llmEmbeddingProvider"
         static let whisperModelLive         = "whisperModelLive"
         static let whisperModelPost         = "whisperModelPost"
         static let watchFolderPath          = "watchFolderPath"
@@ -133,6 +134,7 @@ final class AppSettings: @unchecked Sendable {
         case ollama = "Ollama"
         case lmStudio = "LM Studio"
         case deepMLX = "DeepMLX"
+        case appleIntelligence = "Apple Intelligence"
         var id: String { rawValue }
     }
 
@@ -157,14 +159,14 @@ final class AppSettings: @unchecked Sendable {
             switch llmProvider {
             case .ollama: return ollamaEndpoint
             case .lmStudio: return lmStudioEndpoint
-            case .deepMLX: return ""
+            case .deepMLX, .appleIntelligence: return ""
             }
         }
         set {
             switch llmProvider {
             case .ollama: ollamaEndpoint = newValue
             case .lmStudio: lmStudioEndpoint = newValue
-            case .deepMLX: break
+            case .deepMLX, .appleIntelligence: break
             }
         }
     }
@@ -175,6 +177,24 @@ final class AppSettings: @unchecked Sendable {
 
     var llmEmbeddingModel: String {
         didSet { UserDefaults.standard.set(llmEmbeddingModel, forKey: Keys.llmEmbeddingModel) }
+    }
+
+    /// Dedicated provider for RAG embedding generation (Ollama or LM Studio).
+    /// Used instead of `llmProvider` because Apple Intelligence and DeepMLX have no embedding API.
+    var llmEmbeddingProvider: LLMProvider {
+        didSet { UserDefaults.standard.set(llmEmbeddingProvider.rawValue, forKey: Keys.llmEmbeddingProvider) }
+    }
+
+    /// Returns the real network endpoint to use for embedding generation.
+    /// Falls back to `ollamaEndpoint` when the main provider has no HTTP API (Apple Intelligence / DeepMLX).
+    var embeddingEndpoint: String {
+        switch llmEmbeddingProvider {
+        case .ollama: return ollamaEndpoint
+        case .lmStudio: return lmStudioEndpoint
+        case .deepMLX, .appleIntelligence:
+            // These providers have no embedding API – fall back to Ollama
+            return ollamaEndpoint
+        }
     }
 
     /// Security-scoped URL to the selected DeepMLX model folder
@@ -258,7 +278,15 @@ final class AppSettings: @unchecked Sendable {
         lmStudioEndpoint        = UserDefaults.standard.string(forKey: Keys.lmStudioEndpoint) ?? Constants.defaultLMStudioEndpoint
         
         customSummaryPrompt     = UserDefaults.standard.string(forKey: Keys.customSummaryPrompt) ?? ""
-        llmEmbeddingModel       = UserDefaults.standard.string(forKey: Keys.llmEmbeddingModel) ?? "nomic-embed-text"
+        llmEmbeddingModel       = UserDefaults.standard.string(forKey: Keys.llmEmbeddingModel) ?? ""
+        
+        if let epStr = UserDefaults.standard.string(forKey: Keys.llmEmbeddingProvider),
+           let ep = LLMProvider(rawValue: epStr),
+           ep == .ollama || ep == .lmStudio {
+            llmEmbeddingProvider = ep
+        } else {
+            llmEmbeddingProvider = .ollama
+        }
         llmModelUnloadTimeout   = UserDefaults.standard.object(forKey: Keys.llmModelUnloadTimeout) as? Int ?? 60
         enableSharding          = UserDefaults.standard.object(forKey: "enableSharding") as? Bool ?? true
         enablePrefetch          = UserDefaults.standard.object(forKey: "enablePrefetch") as? Bool ?? true

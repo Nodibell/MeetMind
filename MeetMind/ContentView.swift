@@ -159,11 +159,21 @@ struct ContentView: View {
             selectedMeetingID: Binding(
                 get: { router.selectedMeetingID },
                 set: { id in
-                    guard let id else { return }
-                    switch id {
-                    case .globalSearch: router.navigate(to: .globalSearch)
-                    case .actionItems:  router.navigate(to: .actionItems)
-                    default:            router.navigate(to: .meeting(id))
+                    DispatchQueue.main.async {
+                        if let id {
+                            if id == .globalSearch {
+                                router.navigate(to: .globalSearch)
+                            } else if id == .actionItems {
+                                router.navigate(to: .actionItems)
+                            } else if isGroup(id) {
+                                router.navigate(to: .groupChat(id))
+                            } else {
+                                router.navigate(to: .meeting(id, highlightedSegmentID: nil))
+                            }
+                        } else {
+                            // Allow deselection to welcome screen so navigation never gets locked
+                            router.navigate(to: .welcome)
+                        }
                     }
                 }
             ),
@@ -192,8 +202,18 @@ struct ContentView: View {
         case .recording:
             recordingDetail
 
-        case .meeting(let id):
-            MeetingDetailForID(meetingID: id, llmService: llmService, transcriptionService: transcriptionService)
+        case .meeting(let id, let segmentID):
+            MeetingDetailForID(
+                meetingID: id,
+                highlightedSegmentID: segmentID,
+                llmService: llmService,
+                transcriptionService: transcriptionService
+            )
+
+        case .groupChat(let id):
+            GroupChatViewForID(groupID: id, llmService: llmService) { meetingID, segmentID in
+                router.navigate(to: .meeting(meetingID, highlightedSegmentID: segmentID))
+            }
 
         case .welcome:
             welcomeView
@@ -353,22 +373,28 @@ struct ContentView: View {
         }
         meetingListVM.setModelContext(modelContext)
     }
+
+    private func isGroup(_ id: UUID) -> Bool {
+        let descriptor = FetchDescriptor<MeetingGroup>(predicate: #Predicate { $0.id == id })
+        let count = (try? modelContext.fetchCount(descriptor)) ?? 0
+        return count > 0
+    }
 }
 
 // MARK: - Meeting Detail Wrapper (loads meeting from ID)
 
 struct MeetingDetailForID: View {
     let meetingID: UUID
+    let highlightedSegmentID: UUID?
     let llmService: any LLMProvider
     let transcriptionService: any TranscriptionProvider
 
     @Environment(\.modelContext) private var modelContext
     @Query private var meetings: [Meeting]
 
-    @State private var detailVM: MeetingDetailViewModel?
-
-    init(meetingID: UUID, llmService: any LLMProvider, transcriptionService: any TranscriptionProvider) {
+    init(meetingID: UUID, highlightedSegmentID: UUID?, llmService: any LLMProvider, transcriptionService: any TranscriptionProvider) {
         self.meetingID = meetingID
+        self.highlightedSegmentID = highlightedSegmentID
         self.llmService = llmService
         self.transcriptionService = transcriptionService
 
@@ -379,7 +405,7 @@ struct MeetingDetailForID: View {
     var body: some View {
         Group {
             if let meeting = meetings.first ?? findMeetingDirectly() {
-                MeetingDetailViewWrapper(meeting: meeting, llmService: llmService, transcriptionService: transcriptionService)
+                MeetingDetailViewWrapper(meeting: meeting, highlightedSegmentID: highlightedSegmentID, llmService: llmService, transcriptionService: transcriptionService)
                     .id(meeting.id)
             } else {
                 VStack(spacing: Theme.Spacing.md) {
@@ -403,6 +429,7 @@ struct MeetingDetailForID: View {
 
 struct MeetingDetailViewWrapper: View {
     let meeting: Meeting
+    let highlightedSegmentID: UUID?
     let llmService: any LLMProvider
     let transcriptionService: any TranscriptionProvider
 
@@ -416,6 +443,74 @@ struct MeetingDetailViewWrapper: View {
             } else {
                 Color.clear.onAppear {
                     let vm = MeetingDetailViewModel(meeting: meeting, llmService: llmService, transcriptionService: transcriptionService)
+                    vm.setModelContext(modelContext)
+                    vm.highlightedSegmentID = highlightedSegmentID
+                    viewModel = vm
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Group Chat Wrapper (loads group from ID)
+
+struct GroupChatViewForID: View {
+    let groupID: UUID
+    let llmService: any LLMProvider
+    var onNavigateToMeeting: (UUID, UUID?) -> Void
+
+    @Environment(\.modelContext) private var modelContext
+    @Query private var groups: [MeetingGroup]
+
+    init(groupID: UUID, llmService: any LLMProvider, onNavigateToMeeting: @escaping (UUID, UUID?) -> Void) {
+        self.groupID = groupID
+        self.llmService = llmService
+        self.onNavigateToMeeting = onNavigateToMeeting
+
+        let predicate = #Predicate<MeetingGroup> { $0.id == groupID }
+        _groups = Query(filter: predicate)
+    }
+
+    var body: some View {
+        Group {
+            if let group = groups.first ?? findGroupDirectly() {
+                GroupChatViewWrapper(group: group, llmService: llmService, onNavigateToMeeting: onNavigateToMeeting)
+                    .id(group.id)
+            } else {
+                VStack(spacing: Theme.Spacing.md) {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text("Завантаження групи...")
+                        .font(Theme.Typography.body)
+                        .foregroundStyle(Theme.Colors.textTertiary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Theme.Colors.backgroundPrimary)
+            }
+        }
+    }
+
+    private func findGroupDirectly() -> MeetingGroup? {
+        let descriptor = FetchDescriptor<MeetingGroup>(predicate: #Predicate { $0.id == groupID })
+        return try? modelContext.fetch(descriptor).first
+    }
+}
+
+struct GroupChatViewWrapper: View {
+    let group: MeetingGroup
+    let llmService: any LLMProvider
+    var onNavigateToMeeting: (UUID, UUID?) -> Void
+
+    @Environment(\.modelContext) private var modelContext
+    @State private var viewModel: GroupChatViewModel?
+
+    var body: some View {
+        Group {
+            if let vm = viewModel {
+                GroupChatView(viewModel: vm, onNavigateToMeeting: onNavigateToMeeting)
+            } else {
+                Color.clear.onAppear {
+                    let vm = GroupChatViewModel(group: group, llmService: llmService)
                     vm.setModelContext(modelContext)
                     viewModel = vm
                 }

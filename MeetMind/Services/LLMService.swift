@@ -6,6 +6,10 @@
 //
 
 import Foundation
+import NaturalLanguage
+#if canImport(FoundationModels)
+import FoundationModels
+#endif
 
 /// Local LLM integration via Ollama REST API
 actor LLMService: LLMProvider {
@@ -98,6 +102,9 @@ actor LLMService: LLMProvider {
             
             _ = try? await URLSession.shared.data(for: request)
             AppLogger.info("LM Studio model '\(model)' unloaded automatically due to inactivity.")
+            
+        case .appleIntelligence:
+            break
         }
     }
     
@@ -275,7 +282,7 @@ actor LLMService: LLMProvider {
                 topP: topP
             )
             return try encoder.encode(request)
-        case .deepMLX:
+        case .deepMLX, .appleIntelligence:
             return Data()
         }
     }
@@ -286,6 +293,31 @@ actor LLMService: LLMProvider {
     func checkHealth() async -> Bool {
         let provider = await MainActor.run { AppSettings.shared.llmProvider }
         let endpoint = await MainActor.run { AppSettings.shared.llmEndpoint }
+        
+        if provider == .appleIntelligence {
+            #if canImport(FoundationModels)
+            if #available(macOS 15.0, *) {
+                let model = SystemLanguageModel.default
+                switch model.availability {
+                case .available:
+                    updateState(.available(models: ["Apple Intelligence Model"]))
+                    return true
+                case .unavailable(let reason):
+                    updateState(.unavailable(reason: "Apple Intelligence: \(reason)"))
+                    return false
+                @unknown default:
+                    updateState(.unavailable(reason: "Невідомий стан Apple Intelligence"))
+                    return false
+                }
+            } else {
+                updateState(.unavailable(reason: "Apple Intelligence вимагає macOS 15.0+"))
+                return false
+            }
+            #else
+            updateState(.unavailable(reason: "Apple Intelligence не підтримується на цьому пристрої"))
+            return false
+            #endif
+        }
         
         if provider == .deepMLX {
             let deepModelPath = await MainActor.run { AppSettings.shared.deepMLXModelPath }
@@ -449,6 +481,73 @@ actor LLMService: LLMProvider {
         return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
+    // MARK: - Language Detection and Fallback Support
+    
+    private func detectLanguage(of text: String) -> String? {
+        let recognizer = NLLanguageRecognizer()
+        recognizer.processString(String(text.prefix(2000)))
+        return recognizer.dominantLanguage?.rawValue
+    }
+    
+    private func isLanguageSupportedByAppleIntelligence(_ langCode: String?) -> Bool {
+        guard let langCode = langCode else { return true }
+        let unsupported = ["uk", "ru", "be", "kk"]
+        return !unsupported.contains(langCode.lowercased())
+    }
+    
+    private func findAvailableFallbackProvider() async -> AppSettings.LLMProvider? {
+        // Check deepMLX first
+        let deepModelPath = await MainActor.run { AppSettings.shared.deepMLXModelPath }
+        if let modelPath = deepModelPath, DeepLLMService.modelDirectoryValidationIssue(at: modelPath) == nil {
+            return .deepMLX
+        }
+        
+        // Check Ollama next
+        let ollamaEndpoint = await MainActor.run { AppSettings.shared.ollamaEndpoint }
+        if let url = Self.apiURL(endpoint: ollamaEndpoint, provider: .ollama, path: Constants.ollamaHealthPath) {
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.timeoutInterval = 2.0
+            if let (_, response) = try? await URLSession.shared.data(for: request),
+               let httpResponse = response as? HTTPURLResponse,
+               httpResponse.statusCode == 200 {
+                return .ollama
+            }
+        }
+        
+        // Check LM Studio next
+        let lmStudioEndpoint = await MainActor.run { AppSettings.shared.lmStudioEndpoint }
+        if let url = Self.apiURL(endpoint: lmStudioEndpoint, provider: .lmStudio, path: Constants.openaiHealthPath) {
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.timeoutInterval = 2.0
+            if let (_, response) = try? await URLSession.shared.data(for: request),
+               let httpResponse = response as? HTTPURLResponse,
+               httpResponse.statusCode == 200 {
+                return .lmStudio
+            }
+        }
+        
+        return nil
+    }
+    
+    #if canImport(FoundationModels)
+    private func executeWithAppleIntelligence(prompt: String, systemPrompt: String) async throws -> String {
+        guard #available(macOS 15.0, *) else {
+            throw LLMError.requestFailed("Apple Intelligence вимагає macOS 15.0+")
+        }
+        
+        let model = SystemLanguageModel.default
+        guard model.availability == .available else {
+            throw LLMError.requestFailed("Apple Intelligence недоступний на цьому пристрої.")
+        }
+        
+        let session = LanguageModelSession(instructions: systemPrompt)
+        let response = try await session.respond(to: prompt)
+        return response.content
+    }
+    #endif
+
     // MARK: - Summary Generation
     
     /// Generate meeting summary from transcript text
@@ -456,7 +555,39 @@ actor LLMService: LLMProvider {
         AppLogger.info("Summary generation request (length: \(transcript.count) chars, language: \(targetLanguage ?? "auto"))")
         
         let provider = await MainActor.run { AppSettings.shared.llmProvider }
+        return try await generateSummaryWithProvider(provider, transcript: transcript, targetLanguage: targetLanguage)
+    }
+    
+    private func generateSummaryWithProvider(_ provider: AppSettings.LLMProvider, transcript: String, targetLanguage: String?) async throws -> String {
         let customPrompt = await MainActor.run { AppSettings.shared.customSummaryPrompt }
+        
+        if provider == .appleIntelligence {
+            let lang = detectLanguage(of: transcript) ?? targetLanguage ?? "uk"
+            if !isLanguageSupportedByAppleIntelligence(lang) {
+                if let fallback = await findAvailableFallbackProvider() {
+                    AppLogger.warning("Apple Intelligence не підтримує мову транскрипту '\(lang)'. Переключено на \(fallback.rawValue).")
+                    return try await generateSummaryWithProvider(fallback, transcript: transcript, targetLanguage: targetLanguage)
+                } else {
+                    throw LLMError.requestFailed("Apple Intelligence не підтримує українську мову транскрипту. Будь ласка, запустіть Ollama або налаштуйте DeepMLX для обробки української мови.")
+                }
+            }
+            
+            #if canImport(FoundationModels)
+            let systemPrompt = Self.buildSystemPrompt(targetLanguage: targetLanguage, customPrompt: customPrompt)
+            let userPrompt = Self.buildUserPrompt(transcript: transcript)
+            updateState(.generating)
+            do {
+                let result = try await executeWithAppleIntelligence(prompt: userPrompt, systemPrompt: systemPrompt)
+                updateState(.idle)
+                return result
+            } catch {
+                updateState(.idle)
+                throw error
+            }
+            #else
+            throw LLMError.requestFailed("Apple Intelligence не підтримується на цьому пристрої")
+            #endif
+        }
         
         if provider == .deepMLX {
             let systemPrompt = Self.buildSystemPrompt(targetLanguage: targetLanguage, customPrompt: customPrompt)
@@ -519,6 +650,44 @@ actor LLMService: LLMProvider {
     /// Generate a short, relevant title for the meeting based on the transcript
     func generateTitle(transcript: String) async throws -> String {
         AppLogger.info("Meeting title generation request")
+        let provider = await MainActor.run { AppSettings.shared.llmProvider }
+        return try await generateTitleWithProvider(provider, transcript: transcript)
+    }
+    
+    private func generateTitleWithProvider(_ provider: AppSettings.LLMProvider, transcript: String) async throws -> String {
+        if provider == .appleIntelligence {
+            let lang = detectLanguage(of: transcript) ?? "uk"
+            if !isLanguageSupportedByAppleIntelligence(lang) {
+                if let fallback = await findAvailableFallbackProvider() {
+                    AppLogger.warning("Apple Intelligence не підтримує мову транскрипту '\(lang)'. Переключено на \(fallback.rawValue).")
+                    return try await generateTitleWithProvider(fallback, transcript: transcript)
+                } else {
+                    throw LLMError.requestFailed("Apple Intelligence не підтримує українську мову транскрипту. Будь ласка, запустіть Ollama або налаштуйте DeepMLX для обробки української мови.")
+                }
+            }
+            
+            #if canImport(FoundationModels)
+            let prompt = """
+            Напиши КОРОТКУ, інформативну назву для цієї наради на основі транскрипту (максимум 5-6 слів).
+            Не використовуй лапки, крапку в кінці, або слова "Назва:". Тільки саму назву.
+            Відповідай мовою транскрипту.
+            
+            Транскрипт:
+            \(String(transcript.prefix(3000)))
+            """
+            updateState(.generating)
+            do {
+                let result = try await executeWithAppleIntelligence(prompt: prompt, systemPrompt: "Ти асистент, що генерує короткі та влучні назви.")
+                updateState(.idle)
+                return result.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\"", with: "")
+            } catch {
+                updateState(.idle)
+                throw error
+            }
+            #else
+            throw LLMError.requestFailed("Apple Intelligence не підтримується на цьому пристрої")
+            #endif
+        }
         
         let prompt = """
         Напиши КОРОТКУ, інформативну назву для цієї наради на основі транскрипту (максимум 5-6 слів).
@@ -553,6 +722,50 @@ actor LLMService: LLMProvider {
     /// Answer a user question based on the transcript
     func answerQuestion(transcript: String, question: String, history: [LLMService.ChatMessage] = []) async throws -> String {
         AppLogger.info("Q&A question answer request")
+        let provider = await MainActor.run { AppSettings.shared.llmProvider }
+        return try await answerQuestionWithProvider(provider, transcript: transcript, question: question, history: history)
+    }
+    
+    private func answerQuestionWithProvider(_ provider: AppSettings.LLMProvider, transcript: String, question: String, history: [LLMService.ChatMessage]) async throws -> String {
+        if provider == .appleIntelligence {
+            let lang = detectLanguage(of: transcript) ?? "uk"
+            if !isLanguageSupportedByAppleIntelligence(lang) {
+                if let fallback = await findAvailableFallbackProvider() {
+                    AppLogger.warning("Apple Intelligence не підтримує мову транскрипту '\(lang)'. Переключено на \(fallback.rawValue).")
+                    return try await answerQuestionWithProvider(fallback, transcript: transcript, question: question, history: history)
+                } else {
+                    throw LLMError.requestFailed("Apple Intelligence не підтримує українську мову транскрипту. Будь ласка, запустіть Ollama або налаштуйте DeepMLX для обробки української мови.")
+                }
+            }
+            
+            #if canImport(FoundationModels)
+            let systemPrompt = """
+            Ти — асистент для аналізу нарад. Відповідай на питання користувача базуючись ТІЛЬКИ на наданому транскрипті.
+            Якщо відповіді немає в транскрипті, так і скажи.
+            
+            ТРАНСКРИПТ:
+            \(transcript)
+            """
+            
+            var userPrompt = ""
+            for msg in history {
+                userPrompt += "\(msg.role == "user" ? "Q" : "A"): \(msg.content)\n"
+            }
+            userPrompt += "Q: \(question)\nA:"
+            
+            updateState(.generating)
+            do {
+                let result = try await executeWithAppleIntelligence(prompt: userPrompt, systemPrompt: systemPrompt)
+                updateState(.idle)
+                return result
+            } catch {
+                updateState(.idle)
+                throw error
+            }
+            #else
+            throw LLMError.requestFailed("Apple Intelligence не підтримується на цьому пристрої")
+            #endif
+        }
         
         let systemPrompt = """
         Ти — асистент для аналізу нарад. Відповідай на питання користувача базуючись ТІЛЬКИ на наданому транскрипті.
@@ -583,6 +796,49 @@ actor LLMService: LLMProvider {
     /// Translate transcript or summary
     func translateText(text: String, to languageName: String) async throws -> String {
         AppLogger.info("Text translation request to \(languageName)")
+        let provider = await MainActor.run { AppSettings.shared.llmProvider }
+        return try await translateTextWithProvider(provider, text: text, to: languageName)
+    }
+    
+    private func translateTextWithProvider(_ provider: AppSettings.LLMProvider, text: String, to languageName: String) async throws -> String {
+        if provider == .appleIntelligence {
+            let sourceLang = detectLanguage(of: text) ?? "uk"
+            let unsupportedLangs = ["uk", "ru", "be", "kk"]
+            let isSourceUnsupported = unsupportedLangs.contains(sourceLang.lowercased())
+            let isTargetUnsupported = languageName.lowercased().contains("укр") || languageName.lowercased().contains("ukr")
+            
+            if isSourceUnsupported || isTargetUnsupported {
+                if let fallback = await findAvailableFallbackProvider() {
+                    AppLogger.warning("Apple Intelligence не підтримує переклад для української мови. Переключено на \(fallback.rawValue).")
+                    return try await translateTextWithProvider(fallback, text: text, to: languageName)
+                } else {
+                    throw LLMError.requestFailed("Apple Intelligence не підтримує переклад для української мови. Будь ласка, запустіть Ollama або налаштуйте DeepMLX.")
+                }
+            }
+            
+            #if canImport(FoundationModels)
+            let prompt = """
+            Переклади наступний текст на таку мову: \(languageName).
+            Збережи форматування (маркдаун, списки, абзаци).
+            Не додавай від себе жодних коментарів, тільки переклад.
+            
+            ТЕКСТ:
+            \(text)
+            """
+            
+            updateState(.generating)
+            do {
+                let result = try await executeWithAppleIntelligence(prompt: prompt, systemPrompt: "Ти професійний перекладач. Тільки перекладай текст, без додаткових коментарів.")
+                updateState(.idle)
+                return result
+            } catch {
+                updateState(.idle)
+                throw error
+            }
+            #else
+            throw LLMError.requestFailed("Apple Intelligence не підтримується на цьому пристрої")
+            #endif
+        }
         
         let prompt = """
         Переклади наступний текст на таку мову: \(languageName).
@@ -619,14 +875,59 @@ actor LLMService: LLMProvider {
         return AsyncThrowingStream { continuation in
             Task {
                 do {
+                    var provider = await MainActor.run { AppSettings.shared.llmProvider }
+                    
+                    if provider == .appleIntelligence {
+                        let lang = detectLanguage(of: prompt) ?? "uk"
+                        if !isLanguageSupportedByAppleIntelligence(lang) {
+                            if let fallback = await findAvailableFallbackProvider() {
+                                AppLogger.warning("Apple Intelligence не підтримує мову для потокового запиту '\(lang)'. Переключено на \(fallback.rawValue).")
+                                provider = fallback
+                            } else {
+                                continuation.finish(throwing: LLMError.requestFailed("Apple Intelligence не підтримує українську мову. Будь ласка, запустіть Ollama або налаштуйте DeepMLX."))
+                                return
+                            }
+                        }
+                    }
+                    
+                    if provider == .appleIntelligence {
+                        #if canImport(FoundationModels)
+                        if #available(macOS 15.0, *) {
+                            updateState(.generating)
+                            let session = LanguageModelSession(instructions: systemPrompt)
+                            let stream = session.streamResponse(to: prompt)
+                            var previousText = ""
+                            for try await snapshot in stream {
+                                let currentText = snapshot.content
+                                if currentText.hasPrefix(previousText) {
+                                    let delta = String(currentText.dropFirst(previousText.count))
+                                    if !delta.isEmpty {
+                                        continuation.yield(delta)
+                                    }
+                                } else {
+                                    continuation.yield(currentText)
+                                }
+                                previousText = currentText
+                            }
+                            updateState(.idle)
+                            continuation.finish()
+                            return
+                        } else {
+                            continuation.finish(throwing: LLMError.requestFailed("Apple Intelligence вимагає macOS 15.0+"))
+                            return
+                        }
+                        #else
+                        continuation.finish(throwing: LLMError.requestFailed("Apple Intelligence не підтримується на цьому пристрої"))
+                        return
+                        #endif
+                    }
+                    
                     let messages = [
                         ChatMessage(role: "system", content: systemPrompt),
                         ChatMessage(role: "user", content: prompt)
                     ]
                     
-                    let provider = await MainActor.run { AppSettings.shared.llmProvider }
                     let model = await MainActor.run { AppSettings.shared.llmModel }
-                    
                     let endpoint = await MainActor.run { AppSettings.shared.llmEndpoint }
                     let path = provider == .lmStudio ? Constants.openaiChatPath : Constants.ollamaChatPath
                     

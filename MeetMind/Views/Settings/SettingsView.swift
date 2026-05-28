@@ -159,7 +159,28 @@ struct SettingsView: View {
                 .pickerStyle(.segmented)
             }
 
-            if viewModel.settings.llmProvider == .deepMLX {
+            if viewModel.settings.llmProvider == .appleIntelligence {
+                Section("Apple Intelligence (Локально)") {
+                    HStack {
+                        statusIndicator
+                        
+                        Spacer()
+                        
+                        Button(viewModel.isCheckingOllama ? "Перевірка..." : "Перевірити статус") {
+                            Task { await viewModel.checkOllamaConnection() }
+                        }
+                        .disabled(viewModel.isCheckingOllama)
+                    }
+                    
+                    Text("Використовує нативну модель Apple Intelligence на вашому Mac. Працює повністю локально, конфіденційно та без підключення до інтернету.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    
+                    Text("Зверніть увагу: Apple Intelligence наразі не підтримує обробку української мови. При обробці українських нарад система автоматично спробує використати інші налаштовані локальні інструменти (Ollama або MLX) як резервні.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+            } else if viewModel.settings.llmProvider == .deepMLX {
                 Section("Локальна MLX Модель") {
                     HStack {
                         if let path = viewModel.settings.deepMLXModelPath {
@@ -254,6 +275,12 @@ struct SettingsView: View {
                 }
 
                 Section("Модель Ембедингів (RAG)") {
+                    Picker("Провайдер ембедингів", selection: $viewModel.settings.llmEmbeddingProvider) {
+                        Text("Ollama").tag(AppSettings.LLMProvider.ollama)
+                        Text("LM Studio").tag(AppSettings.LLMProvider.lmStudio)
+                    }
+                    .pickerStyle(.segmented)
+                    
                     if viewModel.availableModels.isEmpty {
                         TextField("Модель Ембедингів", text: $viewModel.settings.llmEmbeddingModel)
                     } else {
@@ -266,9 +293,28 @@ struct SettingsView: View {
                             }
                         }
                     }
+                    
+                    // Show which endpoint will be used for embeddings
+                    let embeddingEndpoint = viewModel.settings.embeddingEndpoint
+                    if embeddingEndpoint.isEmpty {
+                        Label("Адреса сервера ембедингів не вказана. Перевірте Endpoint у налаштуваннях провайдера.", systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    } else {
+                        Text("Endpoint: \(embeddingEndpoint)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    
                     Text("Використовується для векторизації нарад. Рекомендовано: nomic-embed-text або bge-small-en.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    
+                    if viewModel.settings.llmProvider == .appleIntelligence || viewModel.settings.llmProvider == .deepMLX {
+                        Label("Apple Intelligence та DeepMLX не мають API ембедингів. Для RAG потрібен окремий Ollama або LM Studio сервер.", systemImage: "info.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(Theme.Colors.accentPrimary)
+                    }
                 }
             }
 

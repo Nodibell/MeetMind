@@ -49,3 +49,6 @@ entities.json
 # Instruments trace
 *.trace
 *.trace/
+
+# Custom build output directory
+build-out/

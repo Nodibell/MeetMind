@@ -24,11 +24,13 @@ final class AppRouter {
         /// The new-recording screen (default on launch)
         case recording
         /// A completed meeting's detail view
-        case meeting(UUID)
+        case meeting(UUID, highlightedSegmentID: UUID? = nil)
         /// Full-text / semantic global search panel
         case globalSearch
         /// Aggregated action items view
         case actionItems
+        /// Q&A chat for a group of meetings using RAG
+        case groupChat(UUID)
         /// Empty welcome screen (no selection)
         case welcome
     }
@@ -46,7 +48,7 @@ final class AppRouter {
 
     /// Called when a recording finishes. Transitions to the meeting detail view.
     func navigateAfterRecordingComplete(meetingID: UUID) {
-        current = .meeting(meetingID)
+        current = .meeting(meetingID, highlightedSegmentID: nil)
     }
 
     /// Resets to a fresh recording session.
@@ -61,7 +63,12 @@ final class AppRouter {
     }
 
     var selectedMeetingID: UUID? {
-        if case .meeting(let id) = current { return id }
-        return nil
+        switch current {
+        case .meeting(let id, _): return id
+        case .groupChat(let id): return id
+        case .globalSearch: return UUID.globalSearch
+        case .actionItems: return UUID.actionItems
+        default: return nil
+        }
     }
 }

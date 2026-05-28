@@ -128,6 +128,22 @@ final class LLMServiceTests: XCTestCase {
         await service.unloadDeepModel()
         XCTAssertTrue(true)
     }
+    
+    func testAppleIntelligenceUnsupportedLanguages() async {
+        let service = LLMService()
+        
+        await MainActor.run {
+            AppSettings.shared.llmProvider = .appleIntelligence
+        }
+        
+        do {
+            _ = try await service.generateSummary(transcript: "Привіт, це нарада українською мовою.", targetLanguage: "uk")
+            XCTFail("Should throw error because fallback cannot fully succeed in test sandbox environment")
+        } catch {
+            // Success: any error is fine since sandbox fallback doesn't succeed
+            XCTAssertTrue(true)
+        }
+    }
 }
 
 final class MeetMindDiarizationEngineTests: XCTestCase {

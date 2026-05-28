@@ -17,6 +17,8 @@ final class MeetingGroup {
     var createdAt: Date
     
     @Relationship(inverse: \Meeting.groups) var meetings: [Meeting] = []
+    @Relationship(deleteRule: .cascade, inverse: \GroupChatMessageEntity.group) var chatMessages: [GroupChatMessageEntity] = []
+    @Relationship(deleteRule: .cascade, inverse: \GroupChatSessionEntity.group) var chatSessions: [GroupChatSessionEntity] = []
     
     init(
         name: String = "Нова група",

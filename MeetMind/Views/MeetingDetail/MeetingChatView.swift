@@ -27,14 +27,36 @@ struct MeetingChatView: View {
                             emptyState
                         } else {
                             ForEach(messages) { message in
-                                ChatMessageRow(message: message)
+                                ChatMessageBubbleView(
+                                    role: message.role,
+                                    content: message.content,
+                                    isStreaming: false
+                                )
+                                .avatar {
+                                    Image(systemName: "brain")
+                                        .font(.system(size: 14))
+                                        .foregroundStyle(.white)
+                                        .frame(width: 28, height: 28)
+                                        .background(Theme.Gradients.accent)
+                                        .clipShape(Circle())
+                                }
+                                .id(message.id)
                             }
                             
                             if isChatting && !streamingResponse.isEmpty {
-                                ChatMessageRow(
-                                    message: .init(role: "assistant", content: ""),
-                                    streamingContent: streamingResponse
+                                ChatMessageBubbleView(
+                                    role: "assistant",
+                                    content: streamingResponse,
+                                    isStreaming: true
                                 )
+                                .avatar {
+                                    Image(systemName: "brain")
+                                        .font(.system(size: 14))
+                                        .foregroundStyle(.white)
+                                        .frame(width: 28, height: 28)
+                                        .background(Theme.Gradients.accent)
+                                        .clipShape(Circle())
+                                }
                                 .id("streaming")
                             } else if isChatting {
                                 HStack(alignment: .top, spacing: Theme.Spacing.sm) {
@@ -170,148 +192,8 @@ struct MeetingChatView: View {
     }
 }
 
-/// Custom chat bubble shape with an elegant message tail
-struct ChatBubbleShape: Shape {
-    let isUser: Bool
-    
-    func path(in rect: CGRect) -> Path {
-        let path = CGMutablePath()
-        
-        let minX = rect.minX
-        let maxX = rect.maxX
-        let minY = rect.minY
-        let maxY = rect.maxY
-        
-        let radius: CGFloat = 16
-        
-        let topLeftRadius = radius
-        let topRightRadius = radius
-        let bottomLeftRadius = isUser ? radius : 4
-        let bottomRightRadius = isUser ? 4 : radius
-        
-        path.move(to: CGPoint(x: minX + topLeftRadius, y: minY))
-        path.addLine(to: CGPoint(x: maxX - topRightRadius, y: minY))
-        path.addArc(tangent1End: CGPoint(x: maxX, y: minY), tangent2End: CGPoint(x: maxX, y: minY + topRightRadius), radius: topRightRadius)
-        
-        path.addLine(to: CGPoint(x: maxX, y: maxY - bottomRightRadius))
-        path.addArc(tangent1End: CGPoint(x: maxX, y: maxY), tangent2End: CGPoint(x: maxX - bottomRightRadius, y: maxY), radius: bottomRightRadius)
-        
-        path.addLine(to: CGPoint(x: minX + bottomLeftRadius, y: maxY))
-        path.addArc(tangent1End: CGPoint(x: minX, y: maxY), tangent2End: CGPoint(x: minX, y: maxY - bottomLeftRadius), radius: bottomLeftRadius)
-        
-        path.addLine(to: CGPoint(x: minX, y: minY + topLeftRadius))
-        path.addArc(tangent1End: CGPoint(x: minX, y: minY), tangent2End: CGPoint(x: minX + topLeftRadius, y: minY), radius: topLeftRadius)
-        
-        return Path(path)
-    }
-}
+// ChatBubbleShape struct has been refactored into a shared SwiftUI custom component under Components/
 
-private struct ChatMessageRow: View {
-    let message: LLMService.ChatMessage
-    var streamingContent: String? = nil
-    
-    private var isUser: Bool {
-        message.role == "user"
-    }
-    
-    @State private var isHovering = false
-    @State private var copySuccess = false
-    @State private var webViewHeight: CGFloat = 40
-    
-    var body: some View {
-        HStack(alignment: .top, spacing: Theme.Spacing.sm) {
-            if isUser {
-                Spacer(minLength: 40)
-            } else {
-                Image(systemName: "brain")
-                    .font(.system(size: 14))
-                    .foregroundStyle(.white)
-                    .frame(width: 28, height: 28)
-                    .background(Theme.Gradients.accent)
-                    .clipShape(Circle())
-            }
-            
-            VStack(alignment: .leading, spacing: 6) {
-                if let streamingContent {
-                    TypewriterTextView(fullText: streamingContent, isStreaming: true, delayMilliseconds: 10)
-                        .font(Theme.Typography.body)
-                        .foregroundStyle(Theme.Colors.textPrimary)
-                        .textSelection(.enabled)
-                } else if isUser {
-                    Text(message.content)
-                        .font(Theme.Typography.body)
-                        .foregroundStyle(.white)
-                        .textSelection(.enabled)
-                } else {
-                    MarkdownWebView(markdown: message.content, dynamicHeight: $webViewHeight)
-                        .frame(height: webViewHeight)
-                        .frame(maxWidth: .infinity)
-                }
-                
-                // Copy Action Button for AI messages
-                if !isUser && !message.content.isEmpty && streamingContent == nil {
-                    HStack {
-                        Spacer()
-                        
-                        Button(action: {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(message.content, forType: .string)
-                            withAnimation {
-                                copySuccess = true
-                            }
-                            Task {
-                                try? await Task.sleep(for: .seconds(2))
-                                await MainActor.run {
-                                    withAnimation { copySuccess = false }
-                                }
-                            }
-                        }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: copySuccess ? "checkmark" : "doc.on.doc")
-                                    .font(.system(size: 10))
-                                Text(copySuccess ? "Скопійовано" : "Копіювати")
-                                    .font(Theme.Typography.caption)
-                                    .font(.system(size: 9))
-                            }
-                            .foregroundStyle(copySuccess ? Theme.Colors.accentSecondary : Theme.Colors.textSecondary)
-                            .padding(.horizontal, Theme.Spacing.xs)
-                            .padding(.vertical, 4)
-                            .background(Theme.Colors.backgroundPrimary.opacity(0.3))
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                        }
-                        .buttonStyle(.plain)
-                        .opacity(isHovering ? 1.0 : 0.4)
-                    }
-                    .padding(.top, 2)
-                }
-            }
-            .padding(.horizontal, Theme.Spacing.md)
-            .padding(.vertical, Theme.Spacing.sm)
-            .background(
-                isUser ?
-                AnyView(Theme.Gradients.accent) :
-                AnyView(Theme.Colors.backgroundSecondary.opacity(0.5))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(
-                        isUser ? Color.clear : Theme.Colors.borderSubtle.opacity(0.3),
-                        lineWidth: 1
-                    )
-            )
-            .clipShape(ChatBubbleShape(isUser: isUser))
-            .onHover { hovering in
-                withAnimation(Theme.Animation.fast) {
-                    isHovering = hovering
-                }
-            }
-            
-            if !isUser {
-                Spacer(minLength: 40)
-            }
-        }
-    }
-}
 
 #Preview {
     MeetingChatView(

@@ -8,10 +8,19 @@
 import Foundation
 import SwiftData
 
-/// Local actor coordinating text chunking, embedding generation, and search context retrieval
-actor RAGService {
-    private let embeddingService = EmbeddingService()
+/// Coordinator of text chunking, embedding generation, and search context retrieval isolated to MainActor
+@MainActor
+final class RAGService {
+    private let embeddingService: any EmbeddingProvider
     private let vectorStore = VectorStore()
+    
+    init() {
+        self.embeddingService = EmbeddingService()
+    }
+    
+    init(embeddingService: any EmbeddingProvider) {
+        self.embeddingService = embeddingService
+    }
     
     /// Chunks the segments of a meeting and indexes them (generates embeddings and saves VectorEmbeddingEntity records).
     func indexMeeting(meeting: Meeting, modelContext: ModelContext) async throws {
@@ -70,7 +79,10 @@ actor RAGService {
         // Generate embeddings for chunks and insert into modelContext
         for chunk in chunksToEmbed {
             do {
+                // Generates embedding asynchronously on background thread (hopes to EmbeddingService actor)
                 let vector = try await embeddingService.generateEmbedding(for: chunk.text)
+                
+                // Back on MainActor: safe to insert into ModelContext
                 let entity = VectorEmbeddingEntity(
                     meetingID: meetingID,
                     segmentID: chunk.firstSegmentID,
@@ -94,17 +106,23 @@ actor RAGService {
         modelContext: ModelContext,
         topK: Int = 5
     ) async throws -> (contextText: String, referencedItems: [VectorItem]) {
+        // Generates embedding asynchronously on background thread (hopes to EmbeddingService actor)
         let queryVector = try await embeddingService.generateEmbedding(for: query)
         
-        let meetingIDs = Set(group.meetings.map { $0.id })
+        // On MainActor: safe to access group.meetings and modelContext
+        let meetings = group.meetings
+        let meetingIDs = Set(meetings.map { $0.id })
         guard !meetingIDs.isEmpty else { return ("", []) }
         
-        // Fetch all vector embedding entities
+        var meetingTitles: [UUID: String] = [:]
+        for meeting in meetings {
+            meetingTitles[meeting.id] = meeting.title
+        }
+        
         let descriptor = FetchDescriptor<VectorEmbeddingEntity>()
         let allEntities = try modelContext.fetch(descriptor)
         let groupEntities = allEntities.filter { meetingIDs.contains($0.meetingID) }
         
-        // Convert to lightweight VectorItem structs
         let items = groupEntities.map { entity in
             VectorItem(
                 id: entity.id,
@@ -116,14 +134,17 @@ actor RAGService {
             )
         }
         
+        guard !items.isEmpty else { return ("", []) }
+        
+        // Asynchronously call the background vector similarity matcher (hopes to VectorStore actor)
         let matches = await vectorStore.findSimilarChunks(queryVector: queryVector, in: items, topK: topK)
         
         var context = ""
         var referenced: [VectorItem] = []
         
+        // Back on MainActor: safely format output
         for (index, match) in matches.enumerated() {
-            // Find meeting title
-            let meetingTitle = group.meetings.first(where: { $0.id == match.item.meetingID })?.title ?? "Нарада"
+            let meetingTitle = meetingTitles[match.item.meetingID] ?? "Нарада"
             
             context += """
             [Джерело \(index + 1): \(meetingTitle)]

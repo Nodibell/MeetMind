@@ -9,6 +9,7 @@ import XCTest
 import SwiftData
 @testable import MeetMind
 
+@MainActor
 final class MeetMindIntegrationTests: XCTestCase {
     
     var container: ModelContainer!
@@ -23,7 +24,9 @@ final class MeetMindIntegrationTests: XCTestCase {
             ActionItem.self,
             Decision.self,
             MeetingGroup.self,
-            VectorEmbeddingEntity.self
+            VectorEmbeddingEntity.self,
+            GroupChatMessageEntity.self,
+            GroupChatSessionEntity.self
         ])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         container = try ModelContainer(for: schema, configurations: [config])
@@ -241,5 +244,253 @@ final class MeetMindIntegrationTests: XCTestCase {
         let decisionsTexts = meeting.decisions.map { $0.text }
         XCTAssertTrue(decisionsTexts.contains("Вирішили перейти на нову SwiftData схему для MeetMind."))
         XCTAssertTrue(decisionsTexts.contains("Затвердили нову дизайн-систему від Марії."))
+    }
+    
+    func testRAGPipelineIntegration() async throws {
+        // 1. Arrange - Setup meeting, group, segments, and vectors
+        let meeting = Meeting(
+            title: "Дизайн-система MeetMind",
+            date: Date(),
+            duration: 60.0,
+            language: "uk"
+        )
+        context.insert(meeting)
+        
+        let segment1 = TranscriptSegment(
+            id: UUID(),
+            startTime: 0.0,
+            endTime: 15.0,
+            text: "Ми розробляємо новий інтерфейс для macOS Sequoia з ефектом glassmorphism та підтримкою Apple Intelligence.",
+            speakerID: "Speaker 1",
+            speakerName: "Олексій",
+            language: "uk"
+        )
+        segment1.meeting = meeting
+        meeting.transcriptSegments.append(segment1)
+        
+        let segment2 = TranscriptSegment(
+            id: UUID(),
+            startTime: 16.0,
+            endTime: 30.0,
+            text: "Локальний RAG чат працює на пристрої за допомогою Cosine Similarity та фреймворку Accelerate для максимальної швидкості.",
+            speakerID: "Speaker 2",
+            speakerName: "Анна",
+            language: "uk"
+        )
+        segment2.meeting = meeting
+        meeting.transcriptSegments.append(segment2)
+        
+        let group = MeetingGroup(name: "Продуктовий аналіз", customDescription: "Тестування RAG")
+        context.insert(group)
+        
+        group.meetings.append(meeting)
+        meeting.groups.append(group)
+        
+        try context.save()
+        
+        // 2. Act - Create vector embeddings for segments
+        let vectorEntity1 = VectorEmbeddingEntity(
+            meetingID: meeting.id,
+            segmentID: segment1.id,
+            textChunk: segment1.text,
+            vector: [1.0, 0.0, 0.0, 0.0],
+            startIndex: 0
+        )
+        context.insert(vectorEntity1)
+        
+        let vectorEntity2 = VectorEmbeddingEntity(
+            meetingID: meeting.id,
+            segmentID: segment2.id,
+            textChunk: segment2.text,
+            vector: [0.0, 1.0, 0.0, 0.0],
+            startIndex: 0
+        )
+        context.insert(vectorEntity2)
+        try context.save()
+        
+        // Fetch saved vectors for the group and perform search
+        let descriptor = FetchDescriptor<VectorEmbeddingEntity>()
+        let allEntities = (try? context.fetch(descriptor)) ?? []
+        
+        // Filter entities belonging to meetings in the group
+        let groupMeetingIDs = Set(group.meetings.map { $0.id })
+        let filteredEntities = allEntities.filter { groupMeetingIDs.contains($0.meetingID) }
+        
+        XCTAssertEqual(filteredEntities.count, 2)
+        
+        let vectorItems = filteredEntities.map { entity in
+            VectorItem(
+                id: entity.id,
+                meetingID: entity.meetingID,
+                segmentID: entity.segmentID,
+                textChunk: entity.textChunk,
+                vector: entity.vector,
+                startIndex: entity.startIndex
+            )
+        }
+        
+        // Search query vector targeted at Vector 2 (RAG/Accelerate)
+        let queryVector: [Float] = [0.1, 0.9, 0.0, 0.0]
+        let vectorStore = VectorStore()
+        
+        let results = await vectorStore.findSimilarChunks(queryVector: queryVector, in: vectorItems, topK: 2)
+        
+        // 3. Assert - Check search ranking & score
+        XCTAssertEqual(results.count, 2)
+        XCTAssertEqual(results[0].item.segmentID, segment2.id) // closest match should be segment 2
+        XCTAssertGreaterThan(results[0].similarity, 0.8) // high similarity
+        
+        XCTAssertEqual(results[1].item.segmentID, segment1.id) // second match should be segment 1
+        XCTAssertLessThan(results[1].similarity, 0.3) // low similarity
+    }
+    
+    func testGroupChatMessagePersistence() async throws {
+        // 1. Arrange
+        let group = MeetingGroup(name: "Продуктовий чат", customDescription: "Тестування збереження")
+        context.insert(group)
+        try context.save()
+        
+        let mockEmbedding = MockEmbeddingService()
+        let mockRAG = RAGService(embeddingService: mockEmbedding)
+        let mockLLM = MockLLMProvider()
+        let viewModel = GroupChatViewModel(group: group, llmService: mockLLM, ragService: mockRAG)
+        viewModel.setModelContext(context)
+        
+        XCTAssertEqual(viewModel.chatMessages.count, 0)
+        XCTAssertEqual(group.chatMessages.count, 0)
+        
+        // 2. Act
+        await viewModel.sendChatMessage("Які плани на реліз?")
+        
+        // Wait for the streaming LLM response task to complete
+        var retries = 0
+        while viewModel.isChatting && retries < 50 {
+            try? await Task.sleep(for: .milliseconds(100))
+            retries += 1
+        }
+        
+        // 3. Assert
+        XCTAssertFalse(viewModel.isChatting)
+        XCTAssertEqual(viewModel.chatMessages.count, 2)
+        XCTAssertEqual(viewModel.chatMessages[0].role, "user")
+        XCTAssertEqual(viewModel.chatMessages[0].content, "Які плани на реліз?")
+        XCTAssertEqual(viewModel.chatMessages[1].role, "assistant")
+        XCTAssertEqual(viewModel.chatMessages[1].content, "Тестова відповідь")
+        
+        // Verify database state directly
+        let descriptor = FetchDescriptor<GroupChatMessageEntity>()
+        let savedEntities = try context.fetch(descriptor)
+        XCTAssertEqual(savedEntities.count, 2)
+        
+        let sortedSaved = savedEntities.sorted(by: { $0.timestamp < $1.timestamp })
+        XCTAssertEqual(sortedSaved[0].role, "user")
+        XCTAssertEqual(sortedSaved[0].content, "Які плани на реліз?")
+        XCTAssertEqual(sortedSaved[0].group?.id, group.id)
+        
+        XCTAssertEqual(sortedSaved[1].role, "assistant")
+        XCTAssertEqual(sortedSaved[1].content, "Тестова відповідь")
+        XCTAssertEqual(sortedSaved[1].group?.id, group.id)
+        
+        // 4. Test loading from context
+        let newViewModel = GroupChatViewModel(group: group, llmService: mockLLM, ragService: mockRAG)
+        newViewModel.setModelContext(context)
+        XCTAssertEqual(newViewModel.chatMessages.count, 2)
+        XCTAssertEqual(newViewModel.chatMessages[0].content, "Які плани на реліз?")
+        XCTAssertEqual(newViewModel.chatMessages[1].content, "Тестова відповідь")
+        
+        // 5. Test history deletion
+        newViewModel.clearHistory()
+        XCTAssertEqual(newViewModel.chatMessages.count, 0)
+        
+        let afterClearEntities = try context.fetch(descriptor)
+        XCTAssertEqual(afterClearEntities.count, 0)
+        XCTAssertEqual(group.chatMessages.count, 0)
+    }
+    
+    func testGroupChatMultipleSessionsPersistence() async throws {
+        // 1. Arrange
+        let group = MeetingGroup(name: "Мультичат", customDescription: "Декілька сесій")
+        context.insert(group)
+        try context.save()
+        
+        let mockEmbedding = MockEmbeddingService()
+        let mockRAG = RAGService(embeddingService: mockEmbedding)
+        let mockLLM = MockLLMProvider()
+        let viewModel = GroupChatViewModel(group: group, llmService: mockLLM, ragService: mockRAG)
+        viewModel.setModelContext(context)
+        
+        // A default session should be created automatically
+        XCTAssertEqual(viewModel.chatSessions.count, 1)
+        XCTAssertEqual(viewModel.activeSession?.title, "Основна розмова")
+        XCTAssertEqual(viewModel.chatMessages.count, 0)
+        
+        // 2. Send message in Session 1 (should trigger auto-rename)
+        await viewModel.sendChatMessage("Як справи з RAG?")
+        
+        var retries = 0
+        while viewModel.isChatting && retries < 50 {
+            try? await Task.sleep(for: .milliseconds(100))
+            retries += 1
+        }
+        
+        XCTAssertEqual(viewModel.chatMessages.count, 2)
+        XCTAssertEqual(viewModel.activeSession?.title, "Як справи з RAG?")
+        
+        // 3. Create a second session
+        viewModel.createNewChatSession(title: "Нова розмова")
+        XCTAssertEqual(viewModel.chatSessions.count, 2)
+        XCTAssertEqual(viewModel.activeSession?.title, "Нова розмова")
+        XCTAssertEqual(viewModel.chatMessages.count, 0) // Should be empty
+        
+        // Send message in Session 2
+        await viewModel.sendChatMessage("Яка погода?")
+        retries = 0
+        while viewModel.isChatting && retries < 50 {
+            try? await Task.sleep(for: .milliseconds(100))
+            retries += 1
+        }
+        
+        XCTAssertEqual(viewModel.chatMessages.count, 2)
+        XCTAssertEqual(viewModel.activeSession?.title, "Яка погода?")
+        
+        // 4. Switch back to Session 1
+        let firstSession = viewModel.chatSessions[0]
+        viewModel.selectChatSession(firstSession)
+        XCTAssertEqual(viewModel.activeSession?.id, firstSession.id)
+        XCTAssertEqual(viewModel.chatMessages.count, 2)
+        XCTAssertEqual(viewModel.chatMessages[0].content, "Як справи з RAG?")
+        
+        // 5. Delete Session 1
+        viewModel.deleteChatSession(firstSession)
+        XCTAssertEqual(viewModel.chatSessions.count, 1)
+        XCTAssertEqual(viewModel.activeSession?.title, "Яка погода?")
+        XCTAssertEqual(viewModel.chatMessages.count, 2)
+        XCTAssertEqual(viewModel.chatMessages[0].content, "Яка погода?")
+    }
+}
+
+
+final class MockLLMProvider: LLMProvider, @unchecked Sendable {
+    var state: LLMServiceState { .idle }
+    func checkHealth() async -> Bool { true }
+    func generateSummary(transcript: String, targetLanguage: String?) async throws -> String { "" }
+    func generateTitle(transcript: String) async throws -> String { "" }
+    func answerQuestion(transcript: String, question: String, history: [LLMService.ChatMessage]) async throws -> String { "" }
+    func translateText(text: String, to languageName: String) async throws -> String { "" }
+    func extractSpeakerNames(transcript: String) async throws -> [String: String] { [:] }
+    func generateResponseStream(prompt: String, systemPrompt: String) async -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            continuation.yield("Тестова відповідь")
+            continuation.finish()
+        }
+    }
+    func setOnTokenReceived(_ callback: (@Sendable (String) -> Void)?) async {}
+    func setOnStateChanged(_ callback: (@Sendable (LLMServiceState) -> Void)?) async {}
+    func unloadDeepModel() async {}
+}
+
+actor MockEmbeddingService: EmbeddingProvider {
+    func generateEmbedding(for text: String) async throws -> [Float] {
+        return [Float](repeating: 0.0, count: 384)
     }
 }

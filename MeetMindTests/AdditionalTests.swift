@@ -98,3 +98,51 @@ final class AudioPlaybackTests: XCTestCase {
         XCTAssertNil(segment3)
     }
 }
+
+final class AppRouterTests: XCTestCase {
+    
+    @MainActor
+    func testInitialDestination() {
+        let router = AppRouter()
+        XCTAssertEqual(router.current, .recording)
+        XCTAssertTrue(router.isShowingRecording)
+        XCTAssertNil(router.selectedMeetingID)
+    }
+    
+    @MainActor
+    func testNavigationTransitions() {
+        let router = AppRouter()
+        
+        // Navigate to global search
+        router.navigate(to: .globalSearch)
+        XCTAssertEqual(router.current, .globalSearch)
+        XCTAssertEqual(router.selectedMeetingID, UUID.globalSearch)
+        
+        // Navigate to action items
+        router.navigate(to: .actionItems)
+        XCTAssertEqual(router.current, .actionItems)
+        XCTAssertEqual(router.selectedMeetingID, UUID.actionItems)
+        
+        // Navigate to a meeting
+        let meetingUUID = UUID()
+        router.navigate(to: .meeting(meetingUUID))
+        XCTAssertEqual(router.current, .meeting(meetingUUID))
+        XCTAssertEqual(router.selectedMeetingID, meetingUUID)
+        
+        // Navigate to a group chat
+        let groupUUID = UUID()
+        router.navigate(to: .groupChat(groupUUID))
+        XCTAssertEqual(router.current, .groupChat(groupUUID))
+        XCTAssertEqual(router.selectedMeetingID, groupUUID)
+        
+        // Navigate to recording complete
+        let newMeetingUUID = UUID()
+        router.navigateAfterRecordingComplete(meetingID: newMeetingUUID)
+        XCTAssertEqual(router.current, .meeting(newMeetingUUID))
+        
+        // Reset to recording
+        router.startNewRecording()
+        XCTAssertTrue(router.isShowingRecording)
+        XCTAssertNil(router.selectedMeetingID)
+    }
+}

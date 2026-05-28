@@ -9,6 +9,9 @@ import Foundation
 import SwiftData
 import AppKit
 import SwiftUI
+#if canImport(Translation)
+import Translation
+#endif
 
 /// ViewModel for viewing and managing a completed meeting
 @Observable
@@ -26,6 +29,7 @@ final class MeetingDetailViewModel {
     var errorMessage: String?
     var searchText: String = ""
     var exportSuccess: Bool = false
+    var highlightedSegmentID: UUID? = nil
     var selectedSummaryLanguage: String {
         didSet {
             meeting.summaryLanguage = selectedSummaryLanguage
@@ -550,4 +554,47 @@ final class MeetingDetailViewModel {
             AppLogger.error("Failed to auto-detect speaker names: \(error)")
         }
     }
+    
+    #if canImport(Translation)
+    @available(macOS 15.0, *)
+    func translateTranscriptWithAppleTranslation(session: TranslationSession) async {
+        guard let segments = transcript?.segments, !segments.isEmpty else { return }
+        
+        await MainActor.run {
+            self.isTranslatingTranscript = true
+            self.translatedTranscript = ""
+            self.errorMessage = nil
+            self.translatedSegments = [:]
+        }
+        
+        do {
+            // Prepare requests using Segment ID as clientIdentifier to map them back
+            let requests = segments.map { 
+                TranslationSession.Request(sourceText: $0.text, clientIdentifier: $0.id.uuidString) 
+            }
+            
+            let responses = try await session.translations(from: requests)
+            
+            var parsedTranslations: [UUID: String] = [:]
+            for response in responses {
+                if let clientID = response.clientIdentifier,
+                   let segmentID = UUID(uuidString: clientID) {
+                    parsedTranslations[segmentID] = response.targetText
+                }
+            }
+            
+            await MainActor.run {
+                self.translatedSegments = parsedTranslations
+                self.isTranslatingTranscript = false
+            }
+            AppLogger.info("Apple Intelligence translation successfully finished!")
+        } catch {
+            await MainActor.run {
+                self.errorMessage = "Помилка Apple Translation: \(error.localizedDescription)"
+                self.isTranslatingTranscript = false
+            }
+            AppLogger.error("Apple Intelligence translation failed: \(error.localizedDescription)")
+        }
+    }
+    #endif
 }

@@ -12,6 +12,16 @@
         }
       }
     },
+    "[%lld]" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "[%lld]"
+          }
+        }
+      }
+    },
     "#%@" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -43,6 +53,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ (custom)"
+          }
+        }
+      }
+    },
+    "%lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld"
           }
         }
       }
@@ -92,6 +112,28 @@
         }
       }
     },
+    "• Хто відповідальний за реліз продукту?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "• Who is responsible for the product release?"
+          }
+        }
+      }
+    },
+    "• Які ключові рішення були прийняті за весь час?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "• What key decisions were made over time?"
+          }
+        }
+      }
+    },
     "+%lld" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -99,6 +141,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "+%lld"
+          }
+        }
+      }
+    },
+    "|" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "|"
           }
         }
       }
@@ -147,13 +199,18 @@
         }
       }
     },
-    "AI / Ollama" : {
-      "extractionState" : "manual",
+    "AI" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "AI / Ollama"
+            "value" : "AI"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ШІ"
           }
         }
       }
@@ -191,6 +248,37 @@
         }
       }
     },
+    "Apple Intelligence (Локально)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Intelligence (Local)"
+          }
+        }
+      }
+    },
+    "Apple Intelligence (офлайн)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Intelligence (offline)"
+          }
+        }
+      }
+    },
+    "Apple Intelligence та DeepMLX не мають API ембедингів. Для RAG потрібен окремий Ollama або LM Studio сервер." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Intelligence and DeepMLX do not have API embeddings. A separate Ollama or LM Studio server is required for RAG."
+          }
+        }
+      }
+    },
     "DeepMLX завантажує MLX-моделі безпосередньо в MeetMind через Apple Silicon Metal. Модель автоматично вивантажується з пам'яті (VRAM) одразу після завершення аналізу." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -213,6 +301,16 @@
         }
       }
     },
+    "Endpoint: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Endpoint: %@"
+          }
+        }
+      }
+    },
     "English" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -220,6 +318,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "English"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Англійська"
           }
         }
       }
@@ -242,6 +346,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Live (fast)"
+          }
+        }
+      }
+    },
+    "LM Studio" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LM Studio"
           }
         }
       }
@@ -286,6 +400,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Obsidian Vault"
+          }
+        }
+      }
+    },
+    "Ollama" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ollama"
           }
         }
       }
@@ -422,6 +546,16 @@
         }
       }
     },
+    "Адреса сервера ембедингів не вказана. Перевірте Endpoint у налаштуваннях провайдера." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The address of the embedding server is not specified. Check the Endpoint in the provider's settings."
+          }
+        }
+      }
+    },
     "Аналіз" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -443,6 +577,9 @@
           }
         }
       }
+    },
+    "Аналіз усіх ваших нарад (%lld)" : {
+
     },
     "Аналіз..." : {
       "extractionState" : "manual",
@@ -516,6 +653,27 @@
         }
       }
     },
+    "Векторний індекс" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vector Index"
+          }
+        }
+      }
+    },
+    "Вибрати всі" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose All"
+          }
+        }
+      }
+    },
     "Вивантаження моделі" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -549,6 +707,17 @@
         }
       }
     },
+    "Видалити групу" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete group"
+          }
+        }
+      }
+    },
     "Видалити нараду?" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -560,6 +729,9 @@
         }
       }
     },
+    "Видалити розмову" : {
+
+    },
     "Вийти з додатка" : {
       "comment" : "A button that exits the app.",
       "isCommentAutoGenerated" : true,
@@ -568,6 +740,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Exit the app"
+          }
+        }
+      }
+    },
+    "Використовує нативну модель Apple Intelligence на вашому Mac. Працює повністю локально, конфіденційно та без підключення до інтернету." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses the native Apple Intelligence model on your Mac. Works completely locally, confidentially and without an Internet connection."
+          }
+        }
+      }
+    },
+    "Використовується для векторизації нарад. Рекомендовано: nomic-embed-text або bge-small-en." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Used for vectorization of meetings. Recommended: nomic-embed-text or bge-small-en."
           }
         }
       }
@@ -659,6 +851,17 @@
         }
       }
     },
+    "Готовий до аналізу" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ready for analysis"
+          }
+        }
+      }
+    },
     "Готово" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -670,6 +873,17 @@
         }
       }
     },
+    "Групи нарад (RAG)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeting Groups (RAG)"
+          }
+        }
+      }
+    },
     "Далі" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -677,6 +891,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Next"
+          }
+        }
+      }
+    },
+    "Джерела:" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sources:"
           }
         }
       }
@@ -725,6 +950,16 @@
         }
       }
     },
+    "Для запису системного звуку необхідно надати доступ до запису екрану в Системних параметрах." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "To record the system sound, you must provide access to the screen recording in System Settings."
+          }
+        }
+      }
+    },
     "Для режимів Система та Мікс можна вибрати весь екран або конкретне вікно" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -747,6 +982,36 @@
         }
       }
     },
+    "Додати або видалити наради" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add or remove meetings"
+          }
+        }
+      }
+    },
+    "Додати наради" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add meetings"
+          }
+        }
+      }
+    },
+    "Додати наради до групи" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add meetings to group"
+          }
+        }
+      }
+    },
     "Додатковий Промпт для Резюме" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -754,17 +1019,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Custom Summary Prompt"
-          }
-        }
-      }
-    },
-    "експорт скасовано" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "export cancelled"
           }
         }
       }
@@ -835,6 +1089,17 @@
         }
       }
     },
+    "Завантаження групи..." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading group..."
+          }
+        }
+      }
+    },
     "Завантаження завершено" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -847,7 +1112,14 @@
       }
     },
     "Завантаження завершено. Ініціалізація та оптимізація моделі Whisper (це може зайняти 1-2 хвилини)..." : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download complete. Initializing and optimizing the Whisper model (it may take 1-2 minutes)..."
+          }
+        }
+      }
     },
     "Завантаження моделі AI" : {
       "comment" : "A title of a step in onboarding that describes the process of downloading the Whisper model.",
@@ -903,7 +1175,14 @@
       }
     },
     "Завантаження та ініціалізація успішно завершені" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download and initialization completed successfully"
+          }
+        }
+      }
     },
     "Завантаження транскрипту..." : {
       "extractionState" : "manual",
@@ -1103,6 +1382,28 @@
         }
       }
     },
+    "Запитайте про деталі цієї групи нарад..." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ask about details of this meeting group..."
+          }
+        }
+      }
+    },
+    "Запитайте свої наради" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ask your meetings"
+          }
+        }
+      }
+    },
     "Запитайте що завгодно" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1125,6 +1426,19 @@
         }
       }
     },
+    "Збережені чати" : {
+
+    },
+    "Зверніть увагу: Apple Intelligence наразі не підтримує обробку української мови. При обробці українських нарад система автоматично спробує використати інші налаштовані локальні інструменти (Ollama або MLX) як резервні." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Please note: Apple Intelligence does not currently support Ukrainian language processing. When processing Ukrainian meetings, the system will automatically try to use other configured local tools (Ollama or MLX) as backup tools."
+          }
+        }
+      }
+    },
     "Згенерувати резюме" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1132,6 +1446,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Generate summary"
+          }
+        }
+      }
+    },
+    "Зняти виділення" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove selection"
           }
         }
       }
@@ -1317,6 +1641,17 @@
         }
       }
     },
+    "Локальний LLM (Ollama/MLX)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Local LLM (Ollama/MLX)"
+          }
+        }
+      }
+    },
     "Ми завантажуємо Whisper (транскрипція) та Llama 3 (аналіз). Це займе кілька хвилин, оскільки все працює локально." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1370,6 +1705,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mix"
+          }
+        }
+      }
+    },
+    "Місцевий ШІ проаналізує всі транскрипти цієї групи за допомогою RAG та надасть консолідовану відповідь." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Local AI will analyze all transcripts in this group using RAG and provide a consolidated answer."
           }
         }
       }
@@ -1463,6 +1809,26 @@
         }
       }
     },
+    "Модель Ембедингів" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Embeding Model"
+          }
+        }
+      }
+    },
+    "Модель Ембедингів (RAG)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Embeding Model (RAG)"
+          }
+        }
+      }
+    },
     "Надати доступ" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1492,6 +1858,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Back"
+          }
+        }
+      }
+    },
+    "Назва" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Name"
           }
         }
       }
@@ -1540,6 +1917,27 @@
         }
       }
     },
+    "Наприклад: Проєкт Альфа" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "e.g., Project Alpha"
+          }
+        }
+      }
+    },
+    "Нарад не знайдено" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeting not found"
+          }
+        }
+      }
+    },
     "Нарада «%@» буде видалена разом з аудіозаписом і транскриптом. Цю дію не можна скасувати." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1558,6 +1956,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meetings"
+          }
+        }
+      }
+    },
+    "Наради в цій групі (%lld)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meetings in this group (%lld)"
           }
         }
       }
@@ -1669,17 +2078,6 @@
         }
       }
     },
-    "невідома помилка" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "unknown error"
-          }
-        }
-      }
-    },
     "Невідомий" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1691,16 +2089,19 @@
         }
       }
     },
-    "невідомий статус експорту" : {
-      "extractionState" : "stale",
+    "Немає груп" : {
+      "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "unknown export status"
+            "value" : "No groups yet"
           }
         }
       }
+    },
+    "Немає збережених розмов" : {
+
     },
     "Немає контенту" : {
       "comment" : "A message displayed when there is no content to display.",
@@ -1747,6 +2148,17 @@
         }
       }
     },
+    "Нова група нарад (RAG)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Meeting Group (RAG)"
+          }
+        }
+      }
+    },
     "Нова нарада" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1776,6 +2188,27 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Notes are saved in {Vault}/Meetings/"
+          }
+        }
+      }
+    },
+    "Об’єднайте кілька нарад, щоб задавати питання по всій базі знань одночасно." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Combine multiple meetings to query the entire knowledge base at once."
+          }
+        }
+      }
+    },
+    "Оберіть наради, які ви хочете включити до RAG аналізу" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select the meetings you want to include in the RAG analysis"
           }
         }
       }
@@ -1858,6 +2291,39 @@
         }
       }
     },
+    "Опис (необов’язково)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Description (optional)"
+          }
+        }
+      }
+    },
+    "Опишіть тематику цієї групи нарад..." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Describe the topic of this meeting group..."
+          }
+        }
+      }
+    },
+    "Очистити історію чату" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear chat history"
+          }
+        }
+      }
+    },
     "Очікування на мовлення..." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1913,6 +2379,16 @@
         }
       }
     },
+    "Перевірити статус" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check Status"
+          }
+        }
+      }
+    },
     "Перевірка..." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1920,6 +2396,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Checking..."
+          }
+        }
+      }
+    },
+    "Переіндексувати групу" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reindex group"
           }
         }
       }
@@ -1975,6 +2462,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Preparing audio source..."
+          }
+        }
+      }
+    },
+    "Підготовка до індексації..." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparing for indexing..."
           }
         }
       }
@@ -2052,6 +2550,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Error"
+          }
+        }
+      }
+    },
+    "Помилка Apple Translation: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Translation error: %@"
           }
         }
       }
@@ -2147,6 +2656,9 @@
         }
       }
     },
+    "Почати новий чат" : {
+
+    },
     "Почати роботу" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2165,6 +2677,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Searching for tasks..."
+          }
+        }
+      }
+    },
+    "Пошук нарад за назвою..." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search for meetings by name..."
           }
         }
       }
@@ -2231,6 +2753,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Provider"
+          }
+        }
+      }
+    },
+    "Провайдер ембедингів" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Embedding provider"
           }
         }
       }
@@ -2420,6 +2952,61 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Try Again"
+          }
+        }
+      }
+    },
+    "Спробуйте запитати:" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Try asking:"
+          }
+        }
+      }
+    },
+    "СПРОБУЙТЕ ЗАПИТАТИ:" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TRY ASKING:"
+          }
+        }
+      }
+    },
+    "Створи зведення всіх завдань за тиждень" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create a summary of all tasks for the week"
+          }
+        }
+      }
+    },
+    "Створити" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create"
+          }
+        }
+      }
+    },
+    "Створити нову групу" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create new group"
           }
         }
       }
@@ -2637,6 +3224,16 @@
         }
       }
     },
+    "У цій групі ще немає нарад." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There are no meetings in this group yet."
+          }
+        }
+      }
+    },
     "Українська" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2661,6 +3258,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Files"
+          }
+        }
+      }
+    },
+    "Хто відповідальний за проєкт X?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Who is responsible for project X?"
           }
         }
       }
@@ -2709,6 +3317,16 @@
         }
       }
     },
+    "ШІ аналізує та формулює відповідь..." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI analyzes and formulates the answer..."
+          }
+        }
+      }
+    },
     "Шлях до моделі MLX не обрано" : {
       "comment" : "A label displayed when the user has not selected a path to the DeepMLX model.",
       "extractionState" : "manual",
@@ -2733,6 +3351,17 @@
         }
       }
     },
+    "Я можу проаналізувати всі ваші наради і знайти відповіді на будь-яке запитання." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I can analyze all your meetings and find answers to any question."
+          }
+        }
+      }
+    },
     "Я можу проаналізувати всі ваші наради і знайти відповіді на запитання на кшталт:\n• «Які рішення по бюджету ми приймали в квітні?»\n• «Хто відповідальний за проект X?»\n• «Зроби зведення всіх завдань за тиждень»" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2740,6 +3369,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "I can analyze all your meetings and find answers to questions like:\n• \"What budget decisions did we make in April?\"\n• \"Who is responsible for project X?\"\n• \"Give me a summary of all tasks for the week\""
+          }
+        }
+      }
+    },
+    "Які рішення щодо бюджету було прийнято у квітні?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What budget decisions did we make in April?"
           }
         }
       }
