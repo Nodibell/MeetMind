@@ -64,7 +64,8 @@ struct MarkdownWebView: NSViewRepresentable {
             config.userContentController = controller
         }
         
-        let webView = WKWebView(frame: .zero, configuration: config)
+        let webView = NoScrollWKWebView(frame: .zero, configuration: config)
+        webView.shouldForwardScroll = (dynamicHeight != nil)
         webView.setValue(false, forKey: "drawsBackground") // Transparent background
         webView.navigationDelegate = context.coordinator
         
@@ -73,6 +74,9 @@ struct MarkdownWebView: NSViewRepresentable {
     
     func updateNSView(_ webView: WKWebView, context: Context) {
         context.coordinator.parent = self
+        if let noScrollWebView = webView as? NoScrollWKWebView {
+            noScrollWebView.shouldForwardScroll = (dynamicHeight != nil)
+        }
         let html = generateHTML(from: markdown)
         webView.loadHTMLString(html, baseURL: nil)
     }
@@ -108,6 +112,17 @@ struct MarkdownWebView: NSViewRepresentable {
             .replacingOccurrences(of: "`", with: "\\`")
             .replacingOccurrences(of: "$", with: "\\$")
         
+        let scrollbarStyle = dynamicHeight != nil ? """
+        html, body {
+            overflow: hidden !important;
+            -ms-overflow-style: none !important;
+            scrollbar-width: none !important;
+        }
+        html::-webkit-scrollbar, body::-webkit-scrollbar {
+            display: none !important;
+        }
+        """ : ""
+        
         return """
         <!DOCTYPE html>
         <html>
@@ -119,6 +134,7 @@ struct MarkdownWebView: NSViewRepresentable {
             <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
             <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
             <style>
+                \(scrollbarStyle)
                 :root {
                     color-scheme: light dark;
                     --text-color: #1d1d1f;
@@ -289,5 +305,20 @@ struct MarkdownWebView: NSViewRepresentable {
         </body>
         </html>
         """
+    }
+}
+
+// MARK: - WKWebView Subclass for Scroll Redirection
+/// Subclass of WKWebView that redirects scrollwheel gestures to the next responder when configured.
+/// This prevents nested scrollviews from hijacking scrolling inside Swift's ScrollView.
+class NoScrollWKWebView: WKWebView {
+    var shouldForwardScroll: Bool = false
+    
+    override func scrollWheel(with event: NSEvent) {
+        if shouldForwardScroll {
+            self.nextResponder?.scrollWheel(with: event)
+        } else {
+            super.scrollWheel(with: event)
+        }
     }
 }
