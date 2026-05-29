@@ -123,3 +123,5 @@ struct LLMStatusBadge: View {
     .padding()
     .background(Theme.Colors.backgroundPrimary)
 }
+=======
+>>>>>>> feature/ux-improvements-and-tests

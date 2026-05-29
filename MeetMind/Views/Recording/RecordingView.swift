@@ -137,7 +137,28 @@ struct RecordingView: View {
     
     private var processingIndicator: some View {
         VStack(spacing: Theme.Spacing.md) {
-            if viewModel.state == .transcribing {
+            if viewModel.state == .extracting {
+                // Detailed import pipeline progress
+                VStack(spacing: Theme.Spacing.sm) {
+                    HStack(spacing: Theme.Spacing.sm) {
+                        Image(systemName: "arrow.down.circle")
+                            .foregroundStyle(Theme.Colors.accentPrimary)
+                            .font(.system(size: 16))
+                        Text(viewModel.importProgressStage)
+                            .font(Theme.Typography.captionMedium)
+                            .foregroundStyle(Theme.Colors.textSecondary)
+                    }
+
+                    ProgressView(value: viewModel.importProgressValue)
+                        .progressViewStyle(.linear)
+                        .tint(Theme.Colors.accentPrimary)
+                        .frame(maxWidth: 220)
+
+                    Text(String(format: "%.0f%%", viewModel.importProgressValue * 100))
+                        .font(Theme.Typography.monoCaption)
+                        .foregroundStyle(Theme.Colors.textTertiary)
+                }
+            } else if viewModel.state == .transcribing {
                 VStack(spacing: Theme.Spacing.xs) {
                     ProgressView(value: viewModel.transcriptionProgressValue)
                         .progressViewStyle(.linear)

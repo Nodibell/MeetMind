@@ -39,6 +39,12 @@ final class RecordingViewModel {
     var transcriptionProgress: String = ""
     var transcriptionProgressValue: Double = 0.0
 
+    // Import pipeline progress (used during processImportedFile)
+    /// Human-readable description of the current import stage
+    var importProgressStage: String = ""
+    /// Overall import progress value in [0.0, 1.0]
+    var importProgressValue: Double = 0.0
+
     // MARK: - Services
     var audioManager: any AudioProvider
     private let transcriptionService: any TranscriptionProvider
@@ -555,6 +561,8 @@ final class RecordingViewModel {
             self.transcriptionProgressValue = 0
             self.completedMeetingID = nil
             self.meetingTitle = url.deletingPathExtension().lastPathComponent
+            self.importProgressValue = 0.0
+            self.importProgressStage = String(localized: "Підготовка...")
             self.state = .extracting
         }
         
@@ -564,7 +572,12 @@ final class RecordingViewModel {
             let targetURL = Constants.recordingsDirectory.appendingPathComponent("\(uniqueID).m4a")
             
             // 2. Extract the audio track
+            await MainActor.run {
+                self.importProgressStage = String(localized: "Витягуємо аудіо...")
+                self.importProgressValue = 0.05
+            }
             try await AudioExtractor.extractAudio(from: url, to: targetURL)
+            await MainActor.run { self.importProgressValue = 0.20 }
             
             // 3. Create the Meeting object
             let meeting = Meeting(title: self.meetingTitle)
@@ -575,6 +588,8 @@ final class RecordingViewModel {
                 try? self.repository?.insert(meeting)
                 self.state = .transcribing
                 self.currentMeeting?.status = .transcribing
+                self.importProgressStage = String(localized: "Транскрибуємо аудіо...")
+                self.importProgressValue = 0.25
                 try? self.modelContext?.save()
             }
             
@@ -588,6 +603,7 @@ final class RecordingViewModel {
                 if document.totalDuration > 0 {
                     self.currentMeeting?.duration = document.totalDuration
                 }
+                self.importProgressValue = 0.65
             }
             
             // 5. Save transcript to file
@@ -606,6 +622,8 @@ final class RecordingViewModel {
             await MainActor.run {
                 self.state = .summarizing
                 self.currentMeeting?.status = .summarizing
+                self.importProgressStage = String(localized: "Генеруємо резюме...")
+                self.importProgressValue = 0.70
                 try? self.modelContext?.save()
             }
             
@@ -659,6 +677,8 @@ final class RecordingViewModel {
                 self.currentMeeting?.status = .complete
                 self.repository?.trySave()
                 self.completedMeetingID = self.currentMeeting?.id
+                self.importProgressStage = String(localized: "Готово!")
+                self.importProgressValue = 1.0
                 self.state = .complete
                 
                 if AppSettings.shared.autoExportToObsidian {
