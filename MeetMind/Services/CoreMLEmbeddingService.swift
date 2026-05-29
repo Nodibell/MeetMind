@@ -26,7 +26,7 @@ actor CoreMLEmbeddingService: EmbeddingProvider {
 
     // MARK: - Init
 
-    init() {}
+    nonisolated init() {}
 
     // MARK: - Lazy Load
 
