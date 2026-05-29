@@ -6,6 +6,9 @@
 
 ## Key Features ✨
 
+- **Local Multi-Meeting RAG (Knowledge Base)**: Group multiple meeting transcripts and audio recordings into folder structures (groups) using dynamic drag-and-drop or explicit search sheets, and run semantic queries across all transcripts inside the folder concurrently using custom local embeddings.
+- **Persistent Conversation Threads (Multi-Session Chats)**: Manage multiple conversation sessions under each meeting group, supporting creating, switching, and deleting conversation threads with smart auto-naming based on the first query.
+- **Apple Silicon Optimized Vector Core**: Highly parallelized linear algebra engine for close-to-zero latency semantic cosine similarity matching on Apple Silicon via Apple's Accelerate framework (`vDSP`), with deep-link clickable references that jump straight to exact source transcript segments.
 - **Local Transcription**: Uses Apple's WhisperKit for high-quality speech recognition directly on your Mac (CPU/Neural Engine) with a dedicated **Whisper Language Picker** (Auto-detect, Ukrainian, English).
 - **Target Summary/Notes Language**: Choose whether your final Obsidian meeting notes and action items are written in Ukrainian, English, or dynamically match the transcript language.
 - **Dynamic VRAM/RAM Memory Management**: Customize when models are unloaded from memory (unload immediately after generation, after 1/5/10 minutes of inactivity, or never) supporting **Ollama**, **LM Studio**, and **DeepMLX**.
@@ -40,7 +43,7 @@
 ### Installation
 
 #### Option 1: Quick Install (Recommended)
-1. Download the latest packaged release disk image: **[MeetMind_v1.3.7.1.dmg](https://github.com/Nodibell/MeetMind/releases/download/v1.3.7.1/MeetMind_v1.3.7.1.dmg)**.
+1. Download the latest packaged release disk image: **[MeetMind_v1.4.0.dmg](https://github.com/Nodibell/MeetMind/releases/download/v1.4.0/MeetMind_v1.4.0.dmg)**.
 2. Open the `.dmg` file and drag **MeetMind** to your **Applications** folder.
 
 #### Option 2: Build from Source
