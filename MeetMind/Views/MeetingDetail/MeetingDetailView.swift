@@ -166,6 +166,20 @@ struct MeetingDetailView: View {
                 
                 // Actions
                 HStack(spacing: Theme.Spacing.sm) {
+                    // LLM status indicator — shows active provider during AI operations
+                    let isAIBusy = viewModel.isRegeneratingSummary || viewModel.isChatting || viewModel.isTranslatingTranscript
+                    if isAIBusy || true {
+                        LLMStatusBadge(
+                            provider: AppSettings.shared.llmProvider,
+                            modelName: AppSettings.shared.llmProvider == .deepMLX
+                                ? AppSettings.shared.deepMLXModelPath?.lastPathComponent
+                                : (AppSettings.shared.llmProvider == .appleIntelligence ? nil : AppSettings.shared.llmModel),
+                            isGenerating: isAIBusy
+                        )
+                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                        .animation(Theme.Animation.standard, value: isAIBusy)
+                    }
+
                     Button(action: { viewModel.copyTranscript() }) {
                         HStack(spacing: 6) {
                             Image(systemName: "doc.on.doc")
@@ -177,6 +191,7 @@ struct MeetingDetailView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
                     .buttonStyle(.plain)
+                    .help("Скопіювати повний транскрипт у буфер обміну")
                     
                     Button(action: { viewModel.exportToObsidian() }) {
                         HStack(spacing: 6) {
@@ -189,6 +204,7 @@ struct MeetingDetailView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
                     .buttonStyle(.plain)
+                    .help("Експортувати нараду як Markdown-нотатку в Obsidian Vault")
                     
                     translationMenu
                 }
@@ -235,6 +251,7 @@ struct MeetingDetailView: View {
         }
         .buttonStyle(.plain)
         .disabled(viewModel.isTranslatingTranscript)
+        .help("Перекласти транскрипт на іншу мову за допомогою AI або Apple Intelligence")
     }
     
     // MARK: - Tags

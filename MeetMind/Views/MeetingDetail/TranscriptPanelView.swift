@@ -27,6 +27,7 @@ struct TranscriptPanelView: View {
     var onRetranscribe: (() -> Void)? = nil
     
     @State private var highlightedSegmentID: UUID?
+    @State private var activeSegmentID: UUID?
     
     var body: some View {
         VStack(spacing: 0) {
@@ -143,29 +144,12 @@ struct TranscriptPanelView: View {
             if let initialHighlightedSegmentID {
                 highlightedSegmentID = initialHighlightedSegmentID
             }
+            let time = AudioPlaybackManager.shared.currentTime
+            activeSegmentID = segments.first(where: { time >= $0.startTime && time <= $0.endTime })?.id
         }
     }
     
     // MARK: - Content
-    
-    private var activeSegmentID: UUID? {
-        let time = AudioPlaybackManager.shared.currentTime
-        return segments.first(where: { time >= $0.startTime && time <= $0.endTime })?.id
-    }
-    
-    private func isSegmentActive(_ segment: MeetingTranscriptSegment) -> Bool {
-        if segment.id == highlightedSegmentID {
-            return true
-        }
-        
-        let playbackManager = AudioPlaybackManager.shared
-        if playbackManager.isPlaying || playbackManager.currentTime > 0 {
-            let time = playbackManager.currentTime
-            return time >= segment.startTime && time <= segment.endTime
-        }
-        
-        return false
-    }
     
     private var transcriptContent: some View {
         ScrollViewReader { proxy in
@@ -175,7 +159,7 @@ struct TranscriptPanelView: View {
                         TranscriptDetailRow(
                             segment: segment,
                             translatedText: translatedSegments[segment.id],
-                            isHighlighted: isSegmentActive(segment),
+                            isHighlighted: segment.id == highlightedSegmentID || segment.id == activeSegmentID,
                             searchText: searchText,
                             metadata: speakerMetadata.first(where: { $0.id == segment.speakerID }),
                             onUpdateName: { newName in
@@ -229,6 +213,12 @@ struct TranscriptPanelView: View {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         proxy.scrollTo(newID, anchor: .center)
                     }
+                }
+            }
+            .onChange(of: AudioPlaybackManager.shared.currentTime) { _, newTime in
+                let newActiveID = segments.first(where: { newTime >= $0.startTime && newTime <= $0.endTime })?.id
+                if activeSegmentID != newActiveID {
+                    activeSegmentID = newActiveID
                 }
             }
         }
@@ -307,193 +297,6 @@ struct TranscriptPanelView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-// MARK: - Detail Row
-
-struct TranscriptDetailRow: View {
-    let segment: MeetingTranscriptSegment
-    var translatedText: String? = nil
-    var isHighlighted: Bool = false
-    var searchText: String = ""
-    var metadata: SpeakerMetadata?
-    var onUpdateName: (String) -> Void
-    var onUpdateColor: (Color) -> Void
-    
-    @State private var isEditingSpeaker = false
-    @State private var newSpeakerName = ""
-    
-    var body: some View {
-        HStack(alignment: .top, spacing: Theme.Spacing.md) {
-            // Timestamp
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(segment.startTime.formattedTimestamp)
-                    .font(Theme.Typography.monoCaption)
-                    .foregroundStyle(Theme.Colors.accentSecondary)
-                
-                Text(segment.endTime.formattedTimestamp)
-                    .font(Theme.Typography.monoCaption)
-                    .foregroundStyle(Theme.Colors.textTertiary)
-            }
-            .frame(width: 45, alignment: .trailing)
-            .fixedSize(horizontal: true, vertical: false)
-            
-            // Vertical line
-            Rectangle()
-                .fill(isHighlighted ? (metadata?.color ?? Theme.Colors.accentPrimary) : Theme.Colors.borderSubtle)
-                .frame(width: 2)
-                .clipShape(RoundedRectangle(cornerRadius: 1))
-            
-            // Text
-            VStack(alignment: .leading, spacing: 4) {
-                if segment.speakerID != nil {
-                    Button {
-                        newSpeakerName = metadata?.name ?? ""
-                        isEditingSpeaker = true
-                    } label: {
-                        Text(metadata?.displayName ?? segment.speakerName ?? segment.speakerID ?? String(localized: "Невідомий"))
-                            .font(Theme.Typography.caption)
-                            .fontWeight(.bold)
-                            .foregroundStyle(metadata?.color ?? Theme.Colors.accentPrimary)
-                            .padding(.bottom, 2)
-                    }
-                    .buttonStyle(.plain)
-                    .popover(isPresented: $isEditingSpeaker) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Налаштування спікера")
-                                .font(.headline)
-                            
-                            TextField("Ім’я", text: $newSpeakerName)
-                                .textFieldStyle(.roundedBorder)
-                                .onSubmit {
-                                    onUpdateName(newSpeakerName)
-                                    isEditingSpeaker = false
-                                }
-                            
-                            ColorPicker("Колір", selection: Binding(
-                                get: { metadata?.color ?? Theme.Colors.accentPrimary },
-                                set: { onUpdateColor($0) }
-                            ))
-                            
-                            HStack {
-                                Button("Скинути") {
-                                    onUpdateName("")
-                                    isEditingSpeaker = false
-                                }
-                                .buttonStyle(.link)
-                                
-                                Spacer()
-                                
-                                Button("Зберегти") {
-                                    onUpdateName(newSpeakerName)
-                                    isEditingSpeaker = false
-                                }
-                                .buttonStyle(.borderedProminent)
-                            }
-                        }
-                        .padding()
-                        .frame(width: 250)
-                    }
-                }
-                
-                Text(translatedText ?? segment.text)
-                    .font(Theme.Typography.body)
-                    .foregroundStyle(Theme.Colors.textPrimary)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-        .padding(.horizontal, Theme.Spacing.lg)
-        .padding(.vertical, Theme.Spacing.sm)
-        .background(isHighlighted ? (metadata?.color.opacity(0.08) ?? Theme.Colors.accentPrimary.opacity(0.08)) : .clear)
-    }
-}
-
-// MARK: - Premium Audio Player Bar
-
-struct AudioPlayerBar: View {
-    let audioURL: URL
-    @State private var playbackManager = AudioPlaybackManager.shared
-    @State private var isScrubbing = false
-    @State private var dragProgress: Double = 0
-    
-    var body: some View {
-        HStack(spacing: Theme.Spacing.md) {
-            // Play/Pause Button
-            Button(action: {
-                playbackManager.load(url: audioURL)
-                if playbackManager.isPlaying {
-                    playbackManager.pause()
-                } else {
-                    playbackManager.play()
-                }
-            }) {
-                Image(systemName: playbackManager.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 32, height: 32)
-                    .background(Theme.Colors.accentPrimary)
-                    .clipShape(Circle())
-            }
-            .buttonStyle(.plain)
-            
-            // Current Time
-            Text(playbackManager.currentTime.formattedTimestamp)
-                .font(Theme.Typography.monoCaption)
-                .foregroundStyle(Theme.Colors.textSecondary)
-                .frame(width: 40, alignment: .trailing)
-            
-            // Timeline scrubber track
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(Theme.Colors.borderSubtle.opacity(0.4))
-                        .frame(height: 6)
-                    
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(Theme.Colors.accentPrimary)
-                        .frame(width: geo.size.width * (isScrubbing ? dragProgress : playbackManager.progress), height: 6)
-                    
-                    Circle()
-                        .fill(.white)
-                        .frame(width: 12, height: 12)
-                        .shadow(radius: 1)
-                        .offset(x: (geo.size.width - 12) * (isScrubbing ? dragProgress : playbackManager.progress))
-                }
-                .frame(maxHeight: .infinity)
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            isScrubbing = true
-                            let ratio = max(0, min(1, value.location.x / geo.size.width))
-                            dragProgress = ratio
-                        }
-                        .onEnded { value in
-                            let ratio = max(0, min(1, value.location.x / geo.size.width))
-                            playbackManager.load(url: audioURL)
-                            playbackManager.seek(to: ratio * playbackManager.duration)
-                            isScrubbing = false
-                        }
-                )
-            }
-            .frame(height: 20)
-            
-            // Duration Time
-            Text(playbackManager.duration.formattedTimestamp)
-                .font(Theme.Typography.monoCaption)
-                .foregroundStyle(Theme.Colors.textTertiary)
-                .frame(width: 40, alignment: .leading)
-        }
-        .padding(.horizontal, Theme.Spacing.md)
-        .padding(.vertical, Theme.Spacing.sm)
-        .background(Theme.Colors.surfacePrimary.opacity(0.4))
-        .clipShape(RoundedRectangle(cornerRadius: Theme.CornerRadius.md))
-        .overlay(RoundedRectangle(cornerRadius: Theme.CornerRadius.md).stroke(Theme.Colors.border.opacity(0.1), lineWidth: 0.5))
-        .onAppear {
-            playbackManager.load(url: audioURL)
-        }
     }
 }
 

@@ -41,7 +41,7 @@ final class AudioPlaybackManager: NSObject, Sendable {
         reset()
         currentURL = url
         
-        let asset = AVAsset(url: url)
+        let asset = AVURLAsset(url: url)
         let playerItem = AVPlayerItem(asset: asset)
         let newPlayer = AVPlayer(playerItem: playerItem)
         self.player = newPlayer
