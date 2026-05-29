@@ -275,45 +275,65 @@ struct SettingsView: View {
                 }
 
                 Section("Модель Ембедингів (RAG)") {
-                    Picker("Провайдер ембедингів", selection: $viewModel.settings.llmEmbeddingProvider) {
-                        Text("Ollama").tag(AppSettings.LLMProvider.ollama)
-                        Text("LM Studio").tag(AppSettings.LLMProvider.lmStudio)
+                    Picker("Рішення ембедингів", selection: $viewModel.settings.useBuiltInEmbedding) {
+                        Text("Вбудована модель (MiniLM)").tag(true)
+                        Text("Зовнішній сервер (Ollama / LM Studio)").tag(false)
                     }
-                    .pickerStyle(.segmented)
                     
-                    if viewModel.availableModels.isEmpty {
-                        TextField("Модель Ембедингів", text: $viewModel.settings.llmEmbeddingModel)
-                    } else {
-                        Picker("Модель Ембедингів", selection: $viewModel.settings.llmEmbeddingModel) {
-                            ForEach(viewModel.availableModels, id: \.self) { model in
-                                Text(model).tag(model)
+                    if viewModel.settings.useBuiltInEmbedding {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Image(systemName: "checkmark.shield.fill")
+                                    .foregroundStyle(.green)
+                                Text("Локальна обробка на пристрої")
+                                    .fontWeight(.medium)
                             }
-                            if !viewModel.availableModels.contains(viewModel.settings.llmEmbeddingModel) && !viewModel.settings.llmEmbeddingModel.isEmpty {
-                                Text("\(viewModel.settings.llmEmbeddingModel) (custom)").tag(viewModel.settings.llmEmbeddingModel)
+                            Text("Використовує оптимізовану CoreML-модель `all-MiniLM-L6-v2` (Float16, ~42 MB). Працює миттєво, повністю автономно та без навантаження на мережу (Рекомендовано).")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                    } else {
+                        Picker("Провайдер ембедингів", selection: $viewModel.settings.llmEmbeddingProvider) {
+                            Text("Ollama").tag(AppSettings.LLMProvider.ollama)
+                            Text("LM Studio").tag(AppSettings.LLMProvider.lmStudio)
+                        }
+                        .pickerStyle(.segmented)
+                        
+                        if viewModel.availableModels.isEmpty {
+                            TextField("Модель Ембедингів", text: $viewModel.settings.llmEmbeddingModel)
+                        } else {
+                            Picker("Модель Ембедингів", selection: $viewModel.settings.llmEmbeddingModel) {
+                                ForEach(viewModel.availableModels, id: \.self) { model in
+                                    Text(model).tag(model)
+                                }
+                                if !viewModel.availableModels.contains(viewModel.settings.llmEmbeddingModel) && !viewModel.settings.llmEmbeddingModel.isEmpty {
+                                    Text("\(viewModel.settings.llmEmbeddingModel) (custom)").tag(viewModel.settings.llmEmbeddingModel)
+                                }
                             }
                         }
-                    }
-                    
-                    // Show which endpoint will be used for embeddings
-                    let embeddingEndpoint = viewModel.settings.embeddingEndpoint
-                    if embeddingEndpoint.isEmpty {
-                        Label("Адреса сервера ембедингів не вказана. Перевірте Endpoint у налаштуваннях провайдера.", systemImage: "exclamationmark.triangle.fill")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                    } else {
-                        Text("Endpoint: \(embeddingEndpoint)")
+                        
+                        // Show which endpoint will be used for embeddings
+                        let embeddingEndpoint = viewModel.settings.embeddingEndpoint
+                        if embeddingEndpoint.isEmpty {
+                            Label("Адреса сервера ембедингів не вказана. Перевірте Endpoint у налаштуваннях провайдера.", systemImage: "exclamationmark.triangle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                        } else {
+                            Text("Endpoint: \(embeddingEndpoint)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        
+                        Text("Використовується для векторизації нарад. Рекомендовано: nomic-embed-text або bge-small-en.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                    }
-                    
-                    Text("Використовується для векторизації нарад. Рекомендовано: nomic-embed-text або bge-small-en.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    
-                    if viewModel.settings.llmProvider == .appleIntelligence || viewModel.settings.llmProvider == .deepMLX {
-                        Label("Apple Intelligence та DeepMLX не мають API ембедингів. Для RAG потрібен окремий Ollama або LM Studio сервер.", systemImage: "info.circle.fill")
-                            .font(.caption)
-                            .foregroundStyle(Theme.Colors.accentPrimary)
+                        
+                        if viewModel.settings.llmProvider == .appleIntelligence || viewModel.settings.llmProvider == .deepMLX {
+                            Label("Apple Intelligence та DeepMLX не мають API ембедингів. Для RAG потрібен окремий Ollama або LM Studio сервер.", systemImage: "info.circle.fill")
+                                .font(.caption)
+                                .foregroundStyle(Theme.Colors.accentPrimary)
+                        }
                     }
                 }
             }

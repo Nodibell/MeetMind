@@ -14,6 +14,8 @@ protocol EmbeddingProvider: Sendable {
 
 /// Local embedding generation service supporting Ollama and LM Studio
 actor EmbeddingService: EmbeddingProvider {
+    private let coreMLService = CoreMLEmbeddingService()
+    
     init() {}
     
     // MARK: - API Models
@@ -45,6 +47,11 @@ actor EmbeddingService: EmbeddingProvider {
     // MARK: - Generate
     
     func generateEmbedding(for text: String) async throws -> [Float] {
+        let useBuiltIn = await MainActor.run { AppSettings.shared.useBuiltInEmbedding }
+        if useBuiltIn {
+            return try await coreMLService.generateEmbedding(for: text)
+        }
+        
         let mainProvider = await MainActor.run { AppSettings.shared.llmProvider }
         let embeddingProvider = await MainActor.run { AppSettings.shared.llmEmbeddingProvider }
         let model = await MainActor.run { AppSettings.shared.llmEmbeddingModel }

@@ -37,6 +37,7 @@ final class AppSettings: @unchecked Sendable {
         static let customSummaryPrompt      = "customSummaryPrompt"
         static let llmEmbeddingModel        = "llmEmbeddingModel"
         static let llmEmbeddingProvider     = "llmEmbeddingProvider"
+        static let useBuiltInEmbedding      = "useBuiltInEmbedding"
         static let whisperModelLive         = "whisperModelLive"
         static let whisperModelPost         = "whisperModelPost"
         static let watchFolderPath          = "watchFolderPath"
@@ -175,6 +176,10 @@ final class AppSettings: @unchecked Sendable {
         didSet { UserDefaults.standard.set(customSummaryPrompt, forKey: Keys.customSummaryPrompt) }
     }
 
+    var useBuiltInEmbedding: Bool {
+        didSet { UserDefaults.standard.set(useBuiltInEmbedding, forKey: Keys.useBuiltInEmbedding) }
+    }
+
     var llmEmbeddingModel: String {
         didSet { UserDefaults.standard.set(llmEmbeddingModel, forKey: Keys.llmEmbeddingModel) }
     }
@@ -279,6 +284,12 @@ final class AppSettings: @unchecked Sendable {
         
         customSummaryPrompt     = UserDefaults.standard.string(forKey: Keys.customSummaryPrompt) ?? ""
         llmEmbeddingModel       = UserDefaults.standard.string(forKey: Keys.llmEmbeddingModel) ?? ""
+        
+        if UserDefaults.standard.object(forKey: Keys.useBuiltInEmbedding) != nil {
+            useBuiltInEmbedding = UserDefaults.standard.bool(forKey: Keys.useBuiltInEmbedding)
+        } else {
+            useBuiltInEmbedding = true // Default to true for premium, out-of-the-box RAG
+        }
         
         if let epStr = UserDefaults.standard.string(forKey: Keys.llmEmbeddingProvider),
            let ep = LLMProvider(rawValue: epStr),
