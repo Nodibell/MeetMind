@@ -11,6 +11,12 @@ struct GlobalSearchView: View {
     @State private var chatHistory: [ChatMessage] = []
     @State private var isAnalyzing: Bool = false
     @State private var streamingAnswer: String = ""
+    @State private var suggestions: [String] = [
+        String(localized: "Які рішення щодо бюджету було прийнято у квітні?"),
+        String(localized: "Хто відповідальний за проєкт X?"),
+        String(localized: "Створи зведення всіх завдань за тиждень")
+    ]
+    @State private var isGeneratingSuggestions = false
     
     struct ChatMessage: Identifiable {
         let id = UUID()
@@ -40,6 +46,9 @@ struct GlobalSearchView: View {
             searchBar
         }
         .background(Theme.Colors.backgroundPrimary)
+        .task {
+            await generateSuggestions()
+        }
     }
     
     private var header: some View {
@@ -104,16 +113,10 @@ struct GlobalSearchView: View {
                     .tracking(1)
                     .padding(.leading, 4)
                 
-                SuggestionCard(text: "Які рішення щодо бюджету було прийнято у квітні?") {
-                    query = "Які рішення щодо бюджету було прийнято у квітні?"
-                }
-                
-                SuggestionCard(text: "Хто відповідальний за проєкт X?") {
-                    query = "Хто відповідальний за проєкт X?"
-                }
-                
-                SuggestionCard(text: "Створи зведення всіх завдань за тиждень") {
-                    query = "Створи зведення всіх завдань за тиждень"
+                ForEach(suggestions, id: \.self) { suggestion in
+                    SuggestionCard(text: suggestion) {
+                        query = suggestion
+                    }
                 }
             }
             .frame(maxWidth: 420)
@@ -278,6 +281,59 @@ struct GlobalSearchView: View {
                     isAnalyzing = false
                 }
             }
+        }
+    }
+    
+    private func generateSuggestions() async {
+        guard !allMeetings.isEmpty else { return }
+        
+        let recentMeetings = allMeetings.prefix(3)
+        let meetingsSummary = recentMeetings.map { meeting in
+            "- \(meeting.title) (\(meeting.displayDate))"
+        }.joined(separator: "\n")
+        
+        let systemPrompt = """
+        Ти — аналітик нарад у MeetMind. Твоє завдання — згенерувати 3 цікаві, конкретні та специфічні запитання для пошуку або аналізу на основі списку останніх нарад користувача.
+        
+        СПИСОК НАРАД:
+        \(meetingsSummary)
+        
+        Правила:
+        1. Згенеруй рівно 3 запитання українською мовою.
+        2. Запитання мають стосуватися деталей цих нарад (наприклад, рішень, завдань чи планів).
+        3. Не додавай номерів (1, 2, 3), крапок на початку, вступних слів чи будь-яких коментарів. Просто 3 запитання, кожне з нового рядка.
+        4. Роби запитання короткими і природними для швидкого пошуку.
+        """
+        
+        let userPrompt = "Згенеруй 3 специфічні запитання для моїх нарад."
+        
+        isGeneratingSuggestions = true
+        defer { isGeneratingSuggestions = false }
+        
+        do {
+            let result = try await llmService.answerQuestion(transcript: "", question: systemPrompt + "\n" + userPrompt, history: [])
+            
+            let lines = result.components(separatedBy: .newlines)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .map { line -> String in
+                    var cleaned = line
+                    if cleaned.hasPrefix("-") { cleaned.removeFirst() }
+                    if cleaned.hasPrefix("*") { cleaned.removeFirst() }
+                    if let dotIndex = cleaned.firstIndex(of: "."), cleaned.prefix(upTo: dotIndex).allSatisfy(\.isNumber) {
+                        cleaned = String(cleaned[cleaned.index(after: dotIndex)...])
+                    }
+                    return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+                .filter { !$0.isEmpty }
+            
+            if lines.count >= 3 {
+                await MainActor.run {
+                    self.suggestions = Array(lines.prefix(3))
+                }
+            }
+        } catch {
+            AppLogger.warning("Failed to generate dynamic suggestions: \(error)")
         }
     }
 }
