@@ -127,7 +127,17 @@ extension String {
     nonisolated var detectedLanguage: String? {
         let recognizer = NLLanguageRecognizer()
         recognizer.processString(self)
-        return recognizer.dominantLanguage?.rawValue
+        let detected = recognizer.dominantLanguage?.rawValue
+        
+        let hasCyrillic = self.range(of: "\\p{Cyrillic}", options: .regularExpression) != nil
+        if let detected = detected {
+            let unsupported = ["uk", "ru", "be", "kk"]
+            if unsupported.contains(detected.lowercased()) && !hasCyrillic {
+                return "en"
+            }
+            return detected
+        }
+        return hasCyrillic ? "uk" : "en"
     }
 }
 

@@ -486,7 +486,17 @@ actor LLMService: LLMProvider {
     private func detectLanguage(of text: String) -> String? {
         let recognizer = NLLanguageRecognizer()
         recognizer.processString(String(text.prefix(2000)))
-        return recognizer.dominantLanguage?.rawValue
+        let detected = recognizer.dominantLanguage?.rawValue
+        
+        let hasCyrillic = text.range(of: "\\p{Cyrillic}", options: .regularExpression) != nil
+        if let detected = detected {
+            let unsupported = ["uk", "ru", "be", "kk"]
+            if unsupported.contains(detected.lowercased()) && !hasCyrillic {
+                return "en"
+            }
+            return detected
+        }
+        return hasCyrillic ? "uk" : "en"
     }
     
     private func isLanguageSupportedByAppleIntelligence(_ langCode: String?) -> Bool {

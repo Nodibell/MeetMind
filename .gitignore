@@ -4,6 +4,7 @@
 
 ## Build results
 build/
+build_out/
 DerivedData/
 *.hmap
 *.ipa
