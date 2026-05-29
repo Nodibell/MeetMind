@@ -570,9 +570,11 @@ actor LLMService: LLMProvider {
     
     private func generateSummaryWithProvider(_ provider: AppSettings.LLMProvider, transcript: String, targetLanguage: String?) async throws -> String {
         let customPrompt = await MainActor.run { AppSettings.shared.customSummaryPrompt }
+        let detected = detectLanguage(of: transcript)
+        let useEnglish = (provider == .appleIntelligence) || (targetLanguage == "en") || (targetLanguage == nil && detected != "uk")
         
         if provider == .appleIntelligence {
-            let lang = detectLanguage(of: transcript) ?? targetLanguage ?? "uk"
+            let lang = detected ?? targetLanguage ?? "uk"
             if !isLanguageSupportedByAppleIntelligence(lang) {
                 if let fallback = await findAvailableFallbackProvider() {
                     AppLogger.warning("Apple Intelligence не підтримує мову транскрипту '\(lang)'. Переключено на \(fallback.rawValue).")
@@ -583,8 +585,8 @@ actor LLMService: LLMProvider {
             }
             
             #if canImport(FoundationModels)
-            let systemPrompt = Self.buildSystemPrompt(targetLanguage: targetLanguage, customPrompt: customPrompt)
-            let userPrompt = Self.buildUserPrompt(transcript: transcript)
+            let systemPrompt = Self.buildSystemPrompt(useEnglish: useEnglish, targetLanguage: targetLanguage, customPrompt: customPrompt)
+            let userPrompt = Self.buildUserPrompt(useEnglish: useEnglish, transcript: transcript)
             updateState(.generating)
             do {
                 let result = try await executeWithAppleIntelligence(prompt: userPrompt, systemPrompt: systemPrompt)
@@ -600,8 +602,8 @@ actor LLMService: LLMProvider {
         }
         
         if provider == .deepMLX {
-            let systemPrompt = Self.buildSystemPrompt(targetLanguage: targetLanguage, customPrompt: customPrompt)
-            let userPrompt = Self.buildUserPrompt(transcript: transcript)
+            let systemPrompt = Self.buildSystemPrompt(useEnglish: useEnglish, targetLanguage: targetLanguage, customPrompt: customPrompt)
+            let userPrompt = Self.buildUserPrompt(useEnglish: useEnglish, transcript: transcript)
             let messages = [
                 ChatMessage(role: "system", content: systemPrompt),
                 ChatMessage(role: "user", content: userPrompt)
@@ -641,9 +643,13 @@ actor LLMService: LLMProvider {
     // MARK: - Single Summary
     
     private func generateSingleSummary(transcript: String, model: String, endpoint: String, targetLanguage: String?) async throws -> String {
+        let provider = await MainActor.run { AppSettings.shared.llmProvider }
         let customPrompt = await MainActor.run { AppSettings.shared.customSummaryPrompt }
-        let systemPrompt = Self.buildSystemPrompt(targetLanguage: targetLanguage, customPrompt: customPrompt)
-        let userPrompt = Self.buildUserPrompt(transcript: transcript)
+        let detected = detectLanguage(of: transcript)
+        let useEnglish = (provider == .appleIntelligence) || (targetLanguage == "en") || (targetLanguage == nil && detected != "uk")
+        
+        let systemPrompt = Self.buildSystemPrompt(useEnglish: useEnglish, targetLanguage: targetLanguage, customPrompt: customPrompt)
+        let userPrompt = Self.buildUserPrompt(useEnglish: useEnglish, transcript: transcript)
         
         return try await sendChatRequest(
             model: model,
@@ -990,6 +996,10 @@ actor LLMService: LLMProvider {
     private func generateChunkedSummary(transcript: String, model: String, endpoint: String, targetLanguage: String?) async throws -> String {
         AppLogger.info("Transcript too large, splitting into chunks...")
         
+        let provider = await MainActor.run { AppSettings.shared.llmProvider }
+        let detected = detectLanguage(of: transcript)
+        let useEnglish = (provider == .appleIntelligence) || (targetLanguage == "en") || (targetLanguage == nil && detected != "uk")
+        
         let words = transcript.components(separatedBy: .whitespacesAndNewlines)
         let wordsPerChunk = Constants.maxTokensPerChunk * 2
         var chunks: [String] = []
@@ -1004,19 +1014,33 @@ actor LLMService: LLMProvider {
         
         for (index, chunk) in chunks.enumerated() {
             AppLogger.info("Generating summary for chunk \(index + 1)/\(chunks.count)")
-            let chunkPrompt = """
-            Це частина \(index + 1) з \(chunks.count) великої наради.
-            Зроби коротке резюме цієї частини. Виділи тільки ключові моменти.
             
-            ТРАНСКРИПТ:
-            \(chunk)
-            """
+            let systemPrompt = useEnglish ? "You are an assistant that summarizes text. Write concisely." : "Ти асистент, який робить вижимку тексту. Пиши коротко."
+            
+            let chunkPrompt: String
+            if useEnglish {
+                chunkPrompt = """
+                This is part \(index + 1) of \(chunks.count) of a large meeting.
+                Create a short summary of this part. Highlight only key points.
+                
+                TRANSCRIPT:
+                \(chunk)
+                """
+            } else {
+                chunkPrompt = """
+                Це частина \(index + 1) з \(chunks.count) великої наради.
+                Зроби коротке резюме цієї частини. Виділи тільки ключові моменти.
+                
+                ТРАНСКРИПТ:
+                \(chunk)
+                """
+            }
             
             let chunkSummary = try await sendChatRequest(
                 model: model,
                 endpoint: endpoint,
                 messages: [
-                    ChatMessage(role: "system", content: "Ти асистент, який робить вижимку тексту. Пиши коротко."),
+                    ChatMessage(role: "system", content: systemPrompt),
                     ChatMessage(role: "user", content: chunkPrompt)
                 ]
             )
@@ -1025,19 +1049,31 @@ actor LLMService: LLMProvider {
         
         // Merge summaries
         let customPrompt = await MainActor.run { AppSettings.shared.customSummaryPrompt }
-        let mergePrompt = """
-        Об'єднай наступні часткові резюме наради в одне цілісне резюме.
-        Видали дублікати. Збережи формат відповіді (Markdown).
         
-        Часткові резюме:
-        \(chunkSummaries.joined(separator: "\n\n---\n\n"))
-        """
+        let mergePrompt: String
+        if useEnglish {
+            mergePrompt = """
+            Merge the following partial meeting summaries into one cohesive summary.
+            Remove duplicates. Preserve the response format (Markdown).
+            
+            Partial Summaries:
+            \(chunkSummaries.joined(separator: "\n\n---\n\n"))
+            """
+        } else {
+            mergePrompt = """
+            Об'єднай наступні часткові резюме наради в одне цілісне резюме.
+            Видали дублікати. Збережи формат відповіді (Markdown).
+            
+            Часткові резюме:
+            \(chunkSummaries.joined(separator: "\n\n---\n\n"))
+            """
+        }
         
         return try await sendChatRequest(
             model: model,
             endpoint: endpoint,
             messages: [
-                ChatMessage(role: "system", content: Self.buildSystemPrompt(targetLanguage: targetLanguage, customPrompt: customPrompt)),
+                ChatMessage(role: "system", content: Self.buildSystemPrompt(useEnglish: useEnglish, targetLanguage: targetLanguage, customPrompt: customPrompt)),
                 ChatMessage(role: "user", content: mergePrompt)
             ]
         )
@@ -1117,59 +1153,113 @@ actor LLMService: LLMProvider {
     
     // MARK: - Prompt Templates
     
-    nonisolated private static func buildSystemPrompt(targetLanguage: String?, customPrompt: String) -> String {
+    nonisolated private static func buildSystemPrompt(useEnglish: Bool, targetLanguage: String?, customPrompt: String) -> String {
         let languageInstruction: String
         if let targetLanguage, targetLanguage != "auto" {
-            let langName = targetLanguage == "uk" ? "українською" : "англійською"
-            languageInstruction = "Важливо: твоя відповідь має бути написана ВИКЛЮЧНО \(langName) мовою. Не пиши жодних вступних фраз чи підтверджень про мову, одразу починай резюме."
+            if useEnglish {
+                let langName = targetLanguage == "uk" ? "Ukrainian" : "English"
+                languageInstruction = "Important: your response must be written EXCLUSIVELY in \(langName). Do not write any introductory phrases or confirmations about the language, start the summary immediately."
+            } else {
+                let langName = targetLanguage == "uk" ? "українською" : "англійською"
+                languageInstruction = "Важливо: твоя відповідь має бути написана ВИКЛЮЧНО \(langName) мовою. Не пиши жодних вступних фраз чи підтверджень про мову, одразу починай резюме."
+            }
         } else {
-            languageInstruction = "Відповідай ТІЄЮ Ж МОВОЮ, якою написано більшу частину транскрипту (за замовчуванням — українською)."
+            if useEnglish {
+                languageInstruction = "Respond in the SAME LANGUAGE in which most of the transcript is written (by default — English)."
+            } else {
+                languageInstruction = "Відповідай ТІЄЮ Ж МОВОЮ, якою написано більшу частину транскрипту (за замовчуванням — українською)."
+            }
         }
         
-        let customInstruction = customPrompt.isEmpty ? "" : "\nДОДАТКОВІ ІНСТРУКЦІЇ ВІД КОРИСТУВАЧА:\n\(customPrompt)\n"
+        let customInstruction = customPrompt.isEmpty ? "" : (useEnglish ? "\nADDITIONAL USER INSTRUCTIONS:\n\(customPrompt)\n" : "\nДОДАТКОВІ ІНСТРУКЦІЇ ВІД КОРИСТУВАЧА:\n\(customPrompt)\n")
         
-        return """
-        Ти — професійний асистент для аналізу нарад. Аналізуй транскрипти нарад та створюй структуровані резюме.
-        
-        ПРАВИЛА:
-        1. \(languageInstruction)
-        2. НЕ вигадуй інформацію — витягуй ТІЛЬКИ те, що є в транскрипті.
-        3. Якщо в транскрипті змішані мови — збережи оригінальну мову кожної цитати, але загальне резюме пиши цільовою мовою.
-        4. Будь конкретним — уникай загальних фраз і води.
-        5. Форматуй відповідь у Markdown (використовуй заголовки, списки, жирний шрифт).
-        \(customInstruction)
-        """
+        if useEnglish {
+            return """
+            You are a professional assistant for meeting analysis. Analyze meeting transcripts and create structured summaries.
+            
+            RULES:
+            1. \(languageInstruction)
+            2. DO NOT invent information — extract ONLY what is present in the transcript.
+            3. If languages are mixed in the transcript, preserve the original language of each quote, but write the general summary in the target language.
+            4. Be specific — avoid general phrases and filler.
+            5. Format the response in Markdown (use headers, lists, bold text).
+            \(customInstruction)
+            """
+        } else {
+            return """
+            Ти — професійний асистент для аналізу нарад. Аналізуй транскрипти нарад та створюй структуровані резюме.
+            
+            ПРАВИЛА:
+            1. \(languageInstruction)
+            2. НЕ вигадуй інформацію — витягуй ТІЛЬКИ те, що є в транскрипті.
+            3. Якщо в транскрипті змішані мови — збережи оригінальну мову кожної цитати, але загальне резюме пиши цільовою мовою.
+            4. Будь конкретним — уникай загальних фраз і води.
+            5. Форматуй відповідь у Markdown (використовуй заголовки, списки, жирний шрифт).
+            \(customInstruction)
+            """
+        }
     }
     
-    nonisolated private static func buildUserPrompt(transcript: String) -> String {
-        """
-        Проаналізуй наступний транскрипт наради та створи структуроване резюме.
-        
-        Формат відповіді (Markdown):
-        
-        ## Резюме
-        - 5–7 ключових тезів
-        
-        ## Завдання
-        Обов'язково форматуй кожне завдання як пункт списку з чекбоксом `- [ ]` (наприклад, `- [ ] Текст завдання...`).
-        Для кожного завдання обов'язково вказуй у дужках в самому кінці рядка відповідальну особу:
-        - Якщо відповідальну особу вказано: `(відповідальна особа: Ім'я)`
-        - Якщо відповідальну особу не вказано: `(відповідальна особа не вказана)`
-        
-        ## Рішення
-        - Ключові рішення, прийняті під час наради
-        
-        ## Відкриті питання
-        - Невирішені або відкладені теми
-        
-        ## Ризики / Незрозумілі моменти
-        - Будь-що неоднозначне, суперечливе або ризиковане
-        
-        ---
-        
-        Транскрипт:
-        \(transcript)
-        """
+    nonisolated private static func buildUserPrompt(useEnglish: Bool, transcript: String) -> String {
+        if useEnglish {
+            return """
+            Analyze the following meeting transcript and create a structured summary.
+            
+            Response Format (Markdown):
+            
+            ## Summary
+            - 5–7 key points
+            
+            ## Action Items
+            Make sure to format each task as a list item with a checkbox `- [ ]` (e.g., `- [ ] Task description...`).
+            For each task, you must specify the responsible person in parentheses at the very end of the line:
+            - If the responsible person is specified: `(responsible person: Name)`
+            - If the responsible person is not specified: `(responsible person not specified)`
+            
+            ## Decisions
+            - Key decisions made during the meeting
+            
+            ## Open Questions
+            - Unresolved or postponed topics
+            
+            ## Risks / Ambiguities
+            - Anything ambiguous, contradictory, or risky
+            
+            ---
+            
+            Transcript:
+            \(transcript)
+            """
+        } else {
+            return """
+            Проаналізуй наступний транскрипт наради та створи структуроване резюме.
+            
+            Формат відповіді (Markdown):
+            
+            ## Резюме
+            - 5–7 ключових тезів
+            
+            ## Завдання
+            Обов'язково форматуй кожне завдання як пункт списку з чекбоксом `- [ ]` (наприклад, `- [ ] Текст завдання...`).
+            Для кожного завдання обов'язково вказуй у дужках в самому кінці рядка відповідальну особу:
+            - Якщо відповідальну особу вказано: `(відповідальна особа: Ім'я)`
+            - Якщо відповідальну особу не вказано: `(відповідальна особа не вказана)`
+            
+            ## Рішення
+            - Ключові рішення, прийняті під час наради
+            
+            ## Відкриті питання
+            - Невирішені або відкладені теми
+            
+            ## Ризики / Незрозумілі моменти
+            - Будь-що неоднозначне, суперечливе або ризиковане
+            
+            ---
+            
+            Транскрипт:
+            \(transcript)
+            """
+        }
     }
     
     /// Extract speaker names from transcript if they were mentioned
