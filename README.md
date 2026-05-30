@@ -6,16 +6,17 @@
 
 ## Key Features ✨
 
-- **Local Multi-Meeting RAG (Knowledge Base)**: Group multiple meeting transcripts and audio recordings into folder structures (groups) using dynamic drag-and-drop or explicit search sheets, and run semantic queries across all transcripts inside the folder concurrently using custom local embeddings.
+- **ECAPA-TDNN Speaker Diarization & RMS VAD**: State-of-the-art voice activity detection using Root-Mean-Square (RMS) signal energy thresholds on short-time audio slices (filters silence below `-45dB`), coupled with a pretrained CoreML `ECAPATDNN` speaker embedding extractor (192-dimensional voiceprints) and Agglomerative Hierarchical Clustering (AHC) to dynamically estimate speaker counts on the fly via a Cosine distance threshold ($< 0.45$).
+- **Mutual Exclusivity VRAM/RAM Manager**: Thread-safe global actor `ModelMemoryManager` coordinating the dynamic loading and unloading of high-memory models (WhisperKit STT and Local MLX LLM engines). Metal command buffers and transient heaps are completely purged from GPU cache upon swap to avoid Out-Of-Memory (OOM) kernel panics on base Apple Silicon configurations.
+- **Parent-Child Hierarchical RAG Architecture**: Advanced local knowledge base indexer that partitions speaker turns (`TranscriptSegment`) into overlapping sliding window sub-chunks (`ChildEmbeddingEntity`, 120 chars, 30 overlap) for high-recall search, but retrieves the complete parent segment expanded with a chronological context window of $\pm 2$ neighboring segments for maximum generation coherence in the Q&A Chat.
+- **Hybrid Search & Reciprocal Rank Fusion (RRF)**: High-performance search combining precision virtual SQLite FTS5 table keyword MATCH queries with vector-based semantic proximity (calculated using Apple's Accelerate framework `vDSP` dot-product functions on Apple Silicon). Both retrieval lists are synthesized using Reciprocal Rank Fusion (RRF) with a smoothing parameter ($k=60$) to order the best results.
+- **Local Multi-Meeting RAG**: Group multiple meeting transcripts and audio recordings into folder structures (groups) using dynamic drag-and-drop or explicit search sheets, and run semantic queries across all transcripts inside the folder concurrently using custom local embeddings.
 - **Persistent Conversation Threads (Multi-Session Chats)**: Manage multiple conversation sessions under each meeting group, supporting creating, switching, and deleting conversation threads with smart auto-naming based on the first query.
-- **Apple Silicon Optimized Vector Core**: Highly parallelized linear algebra engine for close-to-zero latency semantic cosine similarity matching on Apple Silicon via Apple's Accelerate framework (`vDSP`), with deep-link clickable references that jump straight to exact source transcript segments.
 - **Local Transcription**: Uses Apple's WhisperKit for high-quality speech recognition directly on your Mac (CPU/Neural Engine) with a dedicated **Whisper Language Picker** (Auto-detect, Ukrainian, English).
 - **Target Summary/Notes Language**: Choose whether your final Obsidian meeting notes and action items are written in Ukrainian, English, or dynamically match the transcript language.
-- **Dynamic VRAM/RAM Memory Management**: Customize when models are unloaded from memory (unload immediately after generation, after 1/5/10 minutes of inactivity, or never) supporting **Ollama**, **LM Studio**, and **DeepMLX**.
 - **Meeting Intelligence Database**: Relational SwiftData models for `TranscriptSegmentModel`, `ActionItem` (with live two-way toggle-to-file sync), and `Decision`, enabling high-performance local SQL queries.
 - **Resilient Database Auto-Recovery & Backups**: Multi-tiered initializer that detects schema conflicts, copies database files safely to `Backups/MeetMind.store.backup-<timestamp>`, and uses in-app banners for non-destructive diagnostics.
 - **Deep Search & Vault-Independent AI**: Full-text sidebar search over transcript segments, and local semantic AI queries that run 100% offline without demanding an Obsidian Vault path.
-- **Speaker Diarization & Identification**: Automatically identifies different speakers and remembers their names across meetings using voice embeddings.
 - **System Audio Support**: Record your microphone, system audio (Zoom/Google Meet), or both simultaneously using ScreenCaptureKit.
 - **Pause & Resume**: Full control over your recording sessions with the ability to pause and continue without losing context.
 - **AI Summaries & Premium Chat Q&A**: Automatically generate key takeaways and action items, and ask questions in an overhauled, beautiful **Meeting Q&A Chat** with modern message bubbles, real-time streaming, and native markdown copy controls.
@@ -28,9 +29,9 @@
 
 - **Swift & SwiftUI**: Modern interface and high performance.
 - **WhisperKit**: OpenAI Whisper port by Argmax optimized for CoreML.
-- **FluidAudio**: Advanced diarization and speaker identification engine.
-- **Ollama, LM Studio & DeepMLX**: Multiple local LLM integration pathways with dynamic memory unloading.
-- **SwiftData**: Reliable persistence for meeting history.
+- **ECAPA-TDNN CoreML**: Pretrained neural network voiceprint extractor.
+- **Ollama, LM Studio & DeepMLX**: Multiple local LLM integration pathways with dynamic memory unloading and VRAM actor optimization.
+- **SwiftData**: Reliable persistence for hierarchical meetings, groups, child embeddings, and summaries.
 - **ScreenCaptureKit**: High-quality audio capture.
 
 ## Getting Started 🚀
@@ -43,7 +44,7 @@
 ### Installation
 
 #### Option 1: Quick Install (Recommended)
-1. Download the latest packaged release disk image: **[MeetMind_v1.4.0.dmg](https://github.com/Nodibell/MeetMind/releases/download/v1.4.0/MeetMind_v1.4.0.dmg)**.
+1. Download the latest packaged release disk image: **[MeetMind_v1.5.0.dmg](https://github.com/Nodibell/MeetMind/releases/download/v1.5.0/MeetMind_v1.5.0.dmg)**.
 2. Open the `.dmg` file and drag **MeetMind** to your **Applications** folder.
 
 #### Option 2: Build from Source
