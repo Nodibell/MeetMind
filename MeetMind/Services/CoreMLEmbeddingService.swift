@@ -21,16 +21,18 @@ actor CoreMLEmbeddingService: EmbeddingProvider {
 
     private var model: MLModel?
     private var tokenizer: BertTokenizer?
-    static let embeddingDim: Int = 384
-    static let maxSeqLen: Int    = 128
+    // nonisolated so callers outside the actor can read these constants
+    // without an actor hop (required in Swift 6 strict concurrency mode)
+    nonisolated static let embeddingDim: Int = 384
+    nonisolated static let maxSeqLen: Int    = 128
 
     // MARK: - Init
 
-    nonisolated init() {}
+    init() {}
 
     // MARK: - Lazy Load
 
-    private func loadIfNeeded() throws {
+    private func loadIfNeeded() async throws {
         guard model == nil else { return }
 
         // Locate the .mlmodelc compiled package inside the app bundle
@@ -52,31 +54,32 @@ actor CoreMLEmbeddingService: EmbeddingProvider {
         guard let vocabURL = Bundle.main.url(forResource: "vocab", withExtension: "txt") else {
             throw CoreMLEmbeddingError.vocabNotFound
         }
+        // BertTokenizer.init is nonisolated (see BertTokenizer.swift) — safe to call directly
         tokenizer = try BertTokenizer(vocabURL: vocabURL)
     }
 
     // MARK: - EmbeddingProvider
 
     func generateEmbedding(for text: String) async throws -> [Float] {
-        try loadIfNeeded()
+        try await loadIfNeeded()
 
         guard let model, let tokenizer else {
             throw CoreMLEmbeddingError.modelNotFound
         }
 
-        // Tokenise
+        // Tokenise — nonisolated pure computation, no actor hop required
         let encoding = tokenizer.encode(
             text: text,
             maxLength: CoreMLEmbeddingService.maxSeqLen
         )
 
         // Build MLFeatureProvider
-        let inputIDs     = try MLMultiArray(shape: [1, NSNumber(value: CoreMLEmbeddingService.maxSeqLen)], dataType: .int32)
+        let inputIDs      = try MLMultiArray(shape: [1, NSNumber(value: CoreMLEmbeddingService.maxSeqLen)], dataType: .int32)
         let attentionMask = try MLMultiArray(shape: [1, NSNumber(value: CoreMLEmbeddingService.maxSeqLen)], dataType: .int32)
         let tokenTypeIDs  = try MLMultiArray(shape: [1, NSNumber(value: CoreMLEmbeddingService.maxSeqLen)], dataType: .int32)
 
         for i in 0..<CoreMLEmbeddingService.maxSeqLen {
-            inputIDs[[0, i] as [NSNumber]]     = NSNumber(value: encoding.inputIDs[i])
+            inputIDs[[0, i] as [NSNumber]]      = NSNumber(value: encoding.inputIDs[i])
             attentionMask[[0, i] as [NSNumber]] = NSNumber(value: encoding.attentionMask[i])
             tokenTypeIDs[[0, i] as [NSNumber]]  = 0
         }
@@ -118,136 +121,5 @@ enum CoreMLEmbeddingError: LocalizedError {
         case .badOutput:
             return "Вбудована модель ембедингів повернула некоректний результат."
         }
-    }
-}
-
-// MARK: - BERT WordPiece Tokenizer
-
-/// Minimal BERT WordPiece tokenizer — no external dependencies.
-/// Handles basic lowercasing, punctuation splitting, and WordPiece segmentation.
-struct BertTokenizer {
-
-    private let vocab: [String: Int]
-    private let ids: [Int: String]
-    private let clsID:  Int
-    private let sepID:  Int
-    private let padID:  Int
-    private let unkID:  Int
-
-    init(vocabURL: URL) throws {
-        let content = try String(contentsOf: vocabURL, encoding: .utf8)
-        var v: [String: Int] = [:]
-        var iv: [Int: String] = [:]
-        for (idx, line) in content.components(separatedBy: "\n").enumerated() {
-            let token = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !token.isEmpty else { continue }
-            v[token] = idx
-            iv[idx]  = token
-        }
-        vocab = v
-        ids   = iv
-        clsID = v["[CLS]"] ?? 101
-        sepID = v["[SEP]"] ?? 102
-        padID = v["[PAD]"] ?? 0
-        unkID = v["[UNK]"] ?? 100
-    }
-
-    struct Encoding {
-        var inputIDs:     [Int32]
-        var attentionMask: [Int32]
-    }
-
-    func encode(text: String, maxLength: Int) -> Encoding {
-        let tokens = tokenize(text: text)
-
-        // [CLS] tokens… [SEP], truncate to maxLength
-        var ids: [Int] = [clsID]
-        for t in tokens.prefix(maxLength - 2) {
-            ids.append(wordPieceID(for: t))
-        }
-        ids.append(sepID)
-
-        var inputIDs      = [Int32](repeating: Int32(padID), count: maxLength)
-        var attentionMask = [Int32](repeating: 0,            count: maxLength)
-
-        for (i, id) in ids.enumerated() where i < maxLength {
-            inputIDs[i]      = Int32(id)
-            attentionMask[i] = 1
-        }
-
-        return Encoding(inputIDs: inputIDs, attentionMask: attentionMask)
-    }
-
-    // MARK: - Private
-
-    private func tokenize(text: String) -> [String] {
-        // 1. Basic whitespace tokenization with lowercase
-        let lower = text.lowercased()
-        var words: [String] = []
-        var current = ""
-
-        for ch in lower.unicodeScalars {
-            if ch.properties.isWhitespace {
-                if !current.isEmpty { words.append(current); current = "" }
-            } else if isPunct(ch) {
-                if !current.isEmpty { words.append(current); current = "" }
-                words.append(String(ch))
-            } else {
-                current.unicodeScalars.append(ch)
-            }
-        }
-        if !current.isEmpty { words.append(current) }
-
-        // 2. WordPiece segmentation
-        var subtokens: [String] = []
-        for word in words {
-            subtokens.append(contentsOf: wordPiece(word: word))
-        }
-        return subtokens
-    }
-
-    private func wordPiece(word: String) -> [String] {
-        guard !word.isEmpty else { return [] }
-        if vocab[word] != nil { return [word] }
-
-        var subTokens: [String] = []
-        var start = word.startIndex
-        var isBad = false
-
-        while start < word.endIndex {
-            var end = word.endIndex
-            var curStr: String? = nil
-
-            while start < end {
-                var substr = String(word[start..<end])
-                if start != word.startIndex { substr = "##" + substr }
-                if vocab[substr] != nil {
-                    curStr = substr
-                    break
-                }
-                end = word.index(before: end)
-            }
-
-            if curStr == nil { isBad = true; break }
-            subTokens.append(curStr!)
-            start = end
-        }
-
-        return isBad ? ["[UNK]"] : subTokens
-    }
-
-    private func wordPieceID(for token: String) -> Int {
-        vocab[token] ?? unkID
-    }
-
-    private func isPunct(_ s: Unicode.Scalar) -> Bool {
-        let c = s.value
-        // ASCII punctuation ranges
-        if (c >= 33 && c <= 47) || (c >= 58 && c <= 64) ||
-           (c >= 91 && c <= 96) || (c >= 123 && c <= 126) { return true }
-        return s.properties.generalCategory == .otherPunctuation
-            || s.properties.generalCategory == .dashPunctuation
-            || s.properties.generalCategory == .openPunctuation
-            || s.properties.generalCategory == .closePunctuation
     }
 }

@@ -201,6 +201,14 @@ struct TranscriptPanelView: View {
                     }
                 }
             }
+            .onChange(of: initialHighlightedSegmentID) { _, newID in
+                if let newID {
+                    highlightedSegmentID = newID
+                    withAnimation(.easeInOut(duration: 0.5)) {
+                        proxy.scrollTo(newID, anchor: .center)
+                    }
+                }
+            }
             .onChange(of: highlightedSegmentID) { _, newID in
                 if let newID {
                     withAnimation(.easeInOut(duration: 0.5)) {

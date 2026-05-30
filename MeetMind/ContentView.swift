@@ -25,6 +25,9 @@ struct ContentView: View {
 
     // Navigation
     @State private var router = AppRouter()
+    
+    // LLM state for global status badge
+    @State private var llmState: LLMServiceState = .idle
 
     // ViewModels
     @State private var recordingVM: RecordingViewModel?
@@ -46,11 +49,36 @@ struct ContentView: View {
             } detail: {
                 detailContent
             }
+            .toolbar {
+                ToolbarItem(placement: .status) {
+                    LLMStatusBadge(
+                        provider: AppSettings.shared.llmProvider,
+                        modelName: AppSettings.shared.llmProvider == .deepMLX
+                            ? AppSettings.shared.deepMLXModelPath?.lastPathComponent
+                            : (AppSettings.shared.llmProvider == .appleIntelligence ? nil : AppSettings.shared.llmModel),
+                        isGenerating: llmState == .generating
+                    )
+                }
+            }
         }
         .navigationTitle("")
         .onAppear {
             setupViewModels()
             checkFirstRun()
+            
+            // Listen to LLM Service state changes to update the badge pulsing state
+            Task {
+                let initialState = await llmService.state
+                await MainActor.run {
+                    self.llmState = initialState
+                }
+                
+                await llmService.setOnStateChanged { @Sendable newState in
+                    Task { @MainActor in
+                        self.llmState = newState
+                    }
+                }
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .startNewRecording)) { _ in
             router.startNewRecording()
@@ -448,6 +476,9 @@ struct MeetingDetailViewWrapper: View {
                     viewModel = vm
                 }
             }
+        }
+        .onChange(of: highlightedSegmentID) { _, newID in
+            viewModel?.highlightedSegmentID = newID
         }
     }
 }

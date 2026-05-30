@@ -348,7 +348,7 @@ actor LLMService: LLMProvider {
         updateState(.checking)
         
         do {
-            let modelNames = try await fetchAvailableModels(provider: provider, endpoint: endpoint)
+            let modelNames = try await Self.fetchAvailableModels(provider: provider, endpoint: endpoint)
             lastHealthCheckDate = Date()
             lastHealthCheckProvider = provider
             lastHealthCheckEndpoint = endpoint
@@ -363,7 +363,7 @@ actor LLMService: LLMProvider {
                     try? await Task.sleep(nanoseconds: 600_000_000)
                     
                     do {
-                        let modelNames = try await fetchAvailableModels(provider: provider, endpoint: endpoint)
+                        let modelNames = try await Self.fetchAvailableModels(provider: provider, endpoint: endpoint)
                         lastHealthCheckDate = Date()
                         lastHealthCheckProvider = provider
                         lastHealthCheckEndpoint = endpoint
@@ -384,7 +384,7 @@ actor LLMService: LLMProvider {
         }
     }
     
-    private func fetchAvailableModels(provider: AppSettings.LLMProvider, endpoint: String) async throws -> [String] {
+    nonisolated static func fetchAvailableModels(provider: AppSettings.LLMProvider, endpoint: String) async throws -> [String] {
         if provider == .deepMLX {
             let deepModelPath = await MainActor.run { AppSettings.shared.deepMLXModelPath }
             if let path = deepModelPath {

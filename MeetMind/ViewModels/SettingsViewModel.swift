@@ -18,6 +18,9 @@ final class SettingsViewModel {
     var availableModels: [String] = []
     var isCheckingOllama = false
     var ollamaError: String?
+    
+    var availableEmbeddingModels: [String] = []
+    var isCheckingEmbeddingModels = false
 
     // System audio sources
     var availableSystemAudioSources: [AudioManager.SystemAudioSourceInfo] = []
@@ -79,6 +82,30 @@ final class SettingsViewModel {
                 }
             }
             isCheckingOllama = false
+        }
+    }
+    
+    func refreshEmbeddingModels() async {
+        guard !settings.useBuiltInEmbedding else { return }
+        isCheckingEmbeddingModels = true
+        
+        let provider = settings.llmEmbeddingProvider
+        let endpoint = settings.embeddingEndpoint
+        
+        do {
+            let models = try await LLMService.fetchAvailableModels(provider: provider, endpoint: endpoint)
+            await MainActor.run {
+                self.availableEmbeddingModels = models
+                if !models.isEmpty && !models.contains(settings.llmEmbeddingModel) {
+                    settings.llmEmbeddingModel = models[0]
+                }
+                isCheckingEmbeddingModels = false
+            }
+        } catch {
+            AppLogger.warning("Не вдалося отримати моделі ембедингів з \(endpoint): \(error.localizedDescription)")
+            await MainActor.run {
+                isCheckingEmbeddingModels = false
+            }
         }
     }
 

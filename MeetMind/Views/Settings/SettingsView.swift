@@ -156,7 +156,7 @@ struct SettingsView: View {
                         Text(provider.rawValue).tag(provider)
                     }
                 }
-                .pickerStyle(.segmented)
+                .pickerStyle(.menu)
             }
 
             if viewModel.settings.llmProvider == .appleIntelligence {
@@ -300,14 +300,14 @@ struct SettingsView: View {
                         }
                         .pickerStyle(.segmented)
                         
-                        if viewModel.availableModels.isEmpty {
+                        if viewModel.availableEmbeddingModels.isEmpty {
                             TextField("Модель Ембедингів", text: $viewModel.settings.llmEmbeddingModel)
                         } else {
                             Picker("Модель Ембедингів", selection: $viewModel.settings.llmEmbeddingModel) {
-                                ForEach(viewModel.availableModels, id: \.self) { model in
+                                ForEach(viewModel.availableEmbeddingModels, id: \.self) { model in
                                     Text(model).tag(model)
                                 }
-                                if !viewModel.availableModels.contains(viewModel.settings.llmEmbeddingModel) && !viewModel.settings.llmEmbeddingModel.isEmpty {
+                                if !viewModel.availableEmbeddingModels.contains(viewModel.settings.llmEmbeddingModel) && !viewModel.settings.llmEmbeddingModel.isEmpty {
                                     Text("\(viewModel.settings.llmEmbeddingModel) (custom)").tag(viewModel.settings.llmEmbeddingModel)
                                 }
                             }
@@ -374,6 +374,7 @@ struct SettingsView: View {
         .padding()
         .task {
             await viewModel.checkOllamaConnection()
+            await viewModel.refreshEmbeddingModels()
         }
         .onChange(of: viewModel.settings.llmProvider) { _, _ in
             viewModel.availableModels = []
@@ -382,6 +383,19 @@ struct SettingsView: View {
         .onChange(of: viewModel.settings.llmModel) { _, _ in
             guard viewModel.settings.llmProvider == .lmStudio else { return }
             Task { await viewModel.checkOllamaConnection() }
+        }
+        .onChange(of: viewModel.settings.llmEmbeddingProvider) { _, _ in
+            viewModel.availableEmbeddingModels = []
+            Task { await viewModel.refreshEmbeddingModels() }
+        }
+        .onChange(of: viewModel.settings.useBuiltInEmbedding) { _, _ in
+            Task { await viewModel.refreshEmbeddingModels() }
+        }
+        .onChange(of: viewModel.settings.ollamaEndpoint) { _, _ in
+            Task { await viewModel.refreshEmbeddingModels() }
+        }
+        .onChange(of: viewModel.settings.lmStudioEndpoint) { _, _ in
+            Task { await viewModel.refreshEmbeddingModels() }
         }
     }
     

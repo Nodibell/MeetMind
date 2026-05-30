@@ -14,7 +14,8 @@ protocol EmbeddingProvider: Sendable {
 
 /// Local embedding generation service supporting Ollama and LM Studio
 actor EmbeddingService: EmbeddingProvider {
-    private let coreMLService = CoreMLEmbeddingService()
+    // Lazily created on first use to avoid synchronous actor-init crossing in Swift 6
+    private var coreMLService: CoreMLEmbeddingService?
     
     init() {}
     
@@ -49,7 +50,13 @@ actor EmbeddingService: EmbeddingProvider {
     func generateEmbedding(for text: String) async throws -> [Float] {
         let useBuiltIn = await MainActor.run { AppSettings.shared.useBuiltInEmbedding }
         if useBuiltIn {
-            return try await coreMLService.generateEmbedding(for: text)
+            // CoreMLEmbeddingService.init() is inferred @MainActor by Swift 6
+            // (due to MLModel's CoreML annotations). Hop to the main actor for
+            // creation, then all subsequent calls run on the actor's own executor.
+            if coreMLService == nil {
+                coreMLService = await MainActor.run { CoreMLEmbeddingService() }
+            }
+            return try await coreMLService!.generateEmbedding(for: text)
         }
         
         let mainProvider = await MainActor.run { AppSettings.shared.llmProvider }

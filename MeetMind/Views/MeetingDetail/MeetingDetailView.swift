@@ -64,6 +64,7 @@ struct MeetingDetailView: View {
                     transcriptionProgress: viewModel.transcriptionProgressValue,
                     transcriptionStatusText: viewModel.transcriptionStatusText,
                     audioURL: viewModel.meeting.audioURL,
+                    initialHighlightedSegmentID: viewModel.highlightedSegmentID,
                     onClearTranslation: {
                         viewModel.translatedTranscript = nil
                         viewModel.translatedSegments = [:]
@@ -166,19 +167,7 @@ struct MeetingDetailView: View {
                 
                 // Actions
                 HStack(spacing: Theme.Spacing.sm) {
-                    // LLM status indicator — shows active provider during AI operations
-                    let isAIBusy = viewModel.isRegeneratingSummary || viewModel.isChatting || viewModel.isTranslatingTranscript
-                    if isAIBusy || true {
-                        LLMStatusBadge(
-                            provider: AppSettings.shared.llmProvider,
-                            modelName: AppSettings.shared.llmProvider == .deepMLX
-                                ? AppSettings.shared.deepMLXModelPath?.lastPathComponent
-                                : (AppSettings.shared.llmProvider == .appleIntelligence ? nil : AppSettings.shared.llmModel),
-                            isGenerating: isAIBusy
-                        )
-                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                        .animation(Theme.Animation.standard, value: isAIBusy)
-                    }
+
 
                     Button(action: { viewModel.copyTranscript() }) {
                         HStack(spacing: 6) {
