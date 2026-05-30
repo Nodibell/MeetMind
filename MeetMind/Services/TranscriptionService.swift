@@ -32,6 +32,14 @@ actor TranscriptionService: TranscriptionProvider {
     // Monotonic download progress tracking variable
     private var monotonicDownloadProgress: Double = 0.0
 
+    private var initializationTask: Task<Void, any Error>?
+
+    private func clearInitializationTask(for model: String) {
+        if currentModelName == model {
+            initializationTask = nil
+        }
+    }
+
     // MARK: - Callbacks
     var onStateChanged: (@Sendable (ServiceState) -> Void)?
     var onSegmentTranscribed: (@Sendable (MeetingTranscriptSegment) -> Void)?
@@ -49,6 +57,20 @@ actor TranscriptionService: TranscriptionProvider {
     /// Initialize WhisperKit with specified model
     func initialize(modelName: String? = nil) async throws {
         let model = await MainActor.run { modelName ?? AppSettings.shared.whisperModelLive }
+
+        if let initializationTask, currentModelName == model {
+            AppLogger.info("Initialization for model \(model) already in progress, awaiting existing task...")
+            try await initializationTask.value
+            return
+        }
+
+        if let initializationTask, currentModelName != model {
+            AppLogger.info("Model changed from \(currentModelName) to \(model), cancelling active initialization task...")
+            initializationTask.cancel()
+            self.initializationTask = nil
+            self.whisperKit = nil
+        }
+
         currentModelName = model
         setupMemoryPressureListener()
         AppLogger.info("Initializing WhisperKit with model: \(model)")
@@ -58,39 +80,55 @@ actor TranscriptionService: TranscriptionProvider {
 
         updateState(.downloading(progress: 0))
 
-        do {
-            // 1. Download the model with progress tracking
-            let modelFolderURL = try await WhisperKit.download(
-                variant: model,
-                progressCallback: { progress in
-                    Task { [weak self] in
-                        await self?.updateDownloadProgress(progress.fractionCompleted)
+        let initTask = Task {
+            do {
+                // 1. Download the model with progress tracking
+                let modelFolderURL = try await WhisperKit.download(
+                    variant: model,
+                    progressCallback: { progress in
+                        Task { [weak self] in
+                            await self?.updateDownloadProgress(progress.fractionCompleted)
+                        }
                     }
-                }
-            )
+                )
 
-            AppLogger.info("Model downloaded to: \(modelFolderURL.path)")
+                try Task.checkCancellation()
 
-            updateState(.loading)
+                AppLogger.info("Model downloaded to: \(modelFolderURL.path)")
 
-            // 2. Initialize WhisperKit with the EXACT folder path
-            let config = WhisperKitConfig(
-                model: model,
-                modelFolder: modelFolderURL.path,
-                verbose: false,
-                prewarm: true,
-                download: false
-            )
+                updateState(.loading)
 
-            let pipe = try await WhisperKit(config)
-            self.whisperKit = pipe
-            AppLogger.info("WhisperKit successfully initialized")
-            updateState(.ready)
-        } catch {
-            AppLogger.error("Failed to load WhisperKit model", error: error)
-            updateState(.error(String(localized: "Не вдалося завантажити модель: \(error.localizedDescription)")))
-            throw TranscriptionError.modelLoadFailed(error.localizedDescription)
+                // 2. Initialize WhisperKit with the EXACT folder path
+                let config = WhisperKitConfig(
+                    model: model,
+                    modelFolder: modelFolderURL.path,
+                    verbose: false,
+                    prewarm: true,
+                    download: false
+                )
+
+                let pipe = try await WhisperKit(config)
+                try Task.checkCancellation()
+                self.whisperKit = pipe
+                AppLogger.info("WhisperKit successfully initialized")
+                updateState(.ready)
+            } catch is CancellationError {
+                AppLogger.info("WhisperKit initialization cancelled for \(model)")
+                throw CancellationError()
+            } catch {
+                AppLogger.error("Failed to load WhisperKit model", error: error)
+                updateState(.error(String(localized: "Не вдалося завантажити модель: \(error.localizedDescription)")))
+                throw TranscriptionError.modelLoadFailed(error.localizedDescription)
+            }
         }
+
+        self.initializationTask = initTask
+
+        defer {
+            clearInitializationTask(for: model)
+        }
+
+        try await initTask.value
     }
 
     private func updateDownloadProgress(_ rawProgress: Double) {
@@ -236,10 +274,12 @@ actor TranscriptionService: TranscriptionProvider {
             AppLogger.ai("Starting FluidAudio speaker diarization...")
             let diarizationEngine = await MeetMindDiarizationEngine()
             var segments = convertResults(results, offset: 0)
+            var centroidsToSave: [String: [Float]]? = nil
 
             do {
                 try await diarizationEngine.prepareModels()
                 let (diarizationSegments, centroids) = try await diarizationEngine.diarize(fileURL: url)
+                centroidsToSave = centroids
                 segments = diarizationEngine.alignSpeakers(
                     textSegments: segments,
                     diarizationSegments: diarizationSegments
@@ -264,7 +304,8 @@ actor TranscriptionService: TranscriptionProvider {
                 meetingId: UUID(),
                 createdAt: Date(),
                 language: language,
-                segments: segments
+                segments: segments,
+                speakerCentroids: centroidsToSave
             )
 
             updateState(.ready)

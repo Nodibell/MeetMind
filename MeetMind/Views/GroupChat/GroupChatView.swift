@@ -52,7 +52,7 @@ struct GroupChatView: View {
                     
                     if viewModel.isIndexing {
                         VStack(alignment: .leading, spacing: 4) {
-                            ProgressView(value: viewModel.indexingProgress)
+                            ProgressView(value: viewModel.indexingProgress, total: 1.0)
                                 .progressViewStyle(.linear)
                             
                             Text(viewModel.indexingStatusText)

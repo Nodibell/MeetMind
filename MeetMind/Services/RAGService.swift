@@ -22,94 +22,85 @@ final class RAGService {
         self.embeddingService = embeddingService
     }
     
-    /// Chunks the segments of a meeting and indexes them (generates embeddings and saves VectorEmbeddingEntity records).
+    /// Helper to split text into sliding window child chunks
+    private func splitIntoChunks(_ text: String, size: Int, overlap: Int) -> [String] {
+        var chunks: [String] = []
+        let characters = Array(text)
+        guard !characters.isEmpty else { return [] }
+        
+        var i = 0
+        while i < characters.count {
+            let endIdx = min(i + size, characters.count)
+            let chunk = String(characters[i..<endIdx]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !chunk.isEmpty {
+                chunks.append(chunk)
+            }
+            if endIdx == characters.count { break }
+            i += (size - overlap)
+        }
+        return chunks
+    }
+    
+    /// Chunks the segments of a meeting and indexes them (generates embeddings for child chunks).
     func indexMeeting(meeting: Meeting, modelContext: ModelContext) async throws {
-        // Clear any existing embeddings for this meeting to prevent duplicates
+        // Clear any existing child embeddings for this meeting to prevent duplicates
         let meetingID = meeting.id
-        let descriptor = FetchDescriptor<VectorEmbeddingEntity>()
+        let descriptor = FetchDescriptor<ChildEmbeddingEntity>()
         let allEntities = try modelContext.fetch(descriptor)
-        let existing = allEntities.filter { $0.meetingID == meetingID }
+        let existing = allEntities.filter { $0.meeting?.id == meetingID || $0.parentSegment?.meeting?.id == meetingID }
         for entity in existing {
             modelContext.delete(entity)
         }
         try modelContext.save()
         
+        // Clear old FTS indexes for this meeting
+        let segmentIDs = meeting.transcriptSegments.map { $0.id }
+        if !segmentIDs.isEmpty {
+            await vectorStore.clearFTSIndex(for: segmentIDs)
+        }
+        
         let segments = meeting.transcriptSegments.sorted(by: { $0.startTime < $1.startTime })
         guard !segments.isEmpty else { return }
         
-        var currentChunkText = ""
-        var currentChunkSegments: [TranscriptSegment] = []
-        var chunkStartIndex = 0
-        
-        var chunksToEmbed: [(text: String, firstSegmentID: UUID?, startIndex: Int)] = []
-        
-        for (index, segment) in segments.enumerated() {
-            let segmentText = "\(segment.speakerName ?? "Невідомий"): \(segment.text)\n"
+        for segment in segments {
+            let parentText = "\(segment.speakerName ?? String(localized: "Невідомий")): \(segment.text)"
+            guard !parentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
             
-            if currentChunkText.isEmpty {
-                chunkStartIndex = index
-            }
+            // Index the parent segment in FTS5
+            await vectorStore.indexSegment(segmentID: segment.id, text: parentText, meetingTitle: meeting.title)
             
-            currentChunkText += segmentText
-            currentChunkSegments.append(segment)
+            // Split into child chunks (100-150 characters, sliding window with overlap)
+            let childChunks = splitIntoChunks(parentText, size: 120, overlap: 30)
             
-            // If combined text is over 500 characters or this is the last segment, flush chunk
-            if currentChunkText.count >= 500 || index == segments.count - 1 {
-                chunksToEmbed.append(
-                    (
-                        text: currentChunkText.trimmingCharacters(in: .whitespacesAndNewlines),
-                        firstSegmentID: currentChunkSegments.first?.id,
-                        startIndex: chunkStartIndex
+            for chunk in childChunks {
+                do {
+                    let vector = try await embeddingService.generateEmbedding(for: chunk)
+                    let entity = ChildEmbeddingEntity(
+                        vector: vector,
+                        text: chunk,
+                        startTime: Double(segment.startTime)
                     )
-                )
-                
-                // Start a new chunk, with some overlap (keep the last 1 segment as overlap)
-                if currentChunkSegments.count > 1 {
-                    let lastSegment = currentChunkSegments.last!
-                    currentChunkText = "\(lastSegment.speakerName ?? "Невідомий"): \(lastSegment.text)\n"
-                    currentChunkSegments = [lastSegment]
-                    chunkStartIndex = index
-                } else {
-                    currentChunkText = ""
-                    currentChunkSegments = []
+                    entity.parentSegment = segment
+                    entity.meeting = meeting
+                    modelContext.insert(entity)
+                } catch {
+                    AppLogger.error("Failed to generate embedding for child chunk: \(error.localizedDescription)")
                 }
-            }
-        }
-        
-        // Generate embeddings for chunks and insert into modelContext
-        for chunk in chunksToEmbed {
-            do {
-                // Generates embedding asynchronously on background thread (hopes to EmbeddingService actor)
-                let vector = try await embeddingService.generateEmbedding(for: chunk.text)
-                
-                // Back on MainActor: safe to insert into ModelContext
-                let entity = VectorEmbeddingEntity(
-                    meetingID: meetingID,
-                    segmentID: chunk.firstSegmentID,
-                    textChunk: chunk.text,
-                    vector: vector,
-                    startIndex: chunk.startIndex
-                )
-                modelContext.insert(entity)
-            } catch {
-                AppLogger.error("Failed to generate embedding for chunk: \(error.localizedDescription)")
             }
         }
         
         try modelContext.save()
     }
     
-    /// Queries a group of meetings, retrieves relevant chunks, and returns the constructed context.
+    /// Queries a group of meetings, retrieves relevant chunks using Parent-Child matching, and returns the expanded context.
     func retrieveContext(
         query: String,
         group: MeetingGroup,
         modelContext: ModelContext,
         topK: Int = 5
     ) async throws -> (contextText: String, referencedItems: [VectorItem]) {
-        // Generates embedding asynchronously on background thread (hopes to EmbeddingService actor)
         let queryVector = try await embeddingService.generateEmbedding(for: query)
         
-        // On MainActor: safe to access group.meetings and modelContext
         let meetings = group.meetings
         let meetingIDs = Set(meetings.map { $0.id })
         guard !meetingIDs.isEmpty else { return ("", []) }
@@ -119,40 +110,86 @@ final class RAGService {
             meetingTitles[meeting.id] = meeting.title
         }
         
-        let descriptor = FetchDescriptor<VectorEmbeddingEntity>()
+        // Fetch all ChildEmbeddingEntities for these meetings
+        let descriptor = FetchDescriptor<ChildEmbeddingEntity>()
         let allEntities = try modelContext.fetch(descriptor)
-        let groupEntities = allEntities.filter { meetingIDs.contains($0.meetingID) }
+        let groupEntities = allEntities.filter { entity in
+            if let mID = entity.meeting?.id {
+                return meetingIDs.contains(mID)
+            }
+            if let mID = entity.parentSegment?.meeting?.id {
+                return meetingIDs.contains(mID)
+            }
+            return false
+        }
         
         let items = groupEntities.map { entity in
             VectorItem(
                 id: entity.id,
-                meetingID: entity.meetingID,
-                segmentID: entity.segmentID,
-                textChunk: entity.textChunk,
+                meetingID: entity.meeting?.id ?? entity.parentSegment?.meeting?.id ?? UUID(),
+                segmentID: entity.parentSegment?.id,
+                textChunk: entity.text,
                 vector: entity.vector,
-                startIndex: entity.startIndex
+                startIndex: 0
             )
         }
         
         guard !items.isEmpty else { return ("", []) }
         
-        // Asynchronously call the background vector similarity matcher (hopes to VectorStore actor)
-        let matches = await vectorStore.findSimilarChunks(queryVector: queryVector, in: items, topK: topK)
+        // Find similar child chunks using Hybrid Search (FTS5 + Cosine Similarity with RRF)
+        let matches = await vectorStore.searchHybrid(query: query, queryVector: queryVector, in: items, topK: topK)
         
         var context = ""
         var referenced: [VectorItem] = []
         
-        // Back on MainActor: safely format output
+        // Build expanded context windows for parent segments
+        var processedSegmentIDs = Set<UUID>()
+        
         for (index, match) in matches.enumerated() {
-            let meetingTitle = meetingTitles[match.item.meetingID] ?? "Нарада"
-            
-            context += """
-            [Джерело \(index + 1): \(meetingTitle)]
-            \(match.item.textChunk)
-            
-            """
-            
             referenced.append(match.item)
+            
+            guard let segmentID = match.item.segmentID else {
+                // If no parent segment, just append the child text chunk
+                let meetingTitle = meetingTitles[match.item.meetingID] ?? "Нарада"
+                context += "[Джерело \(index + 1): \(meetingTitle)]\n\(match.item.textChunk)\n\n"
+                continue
+            }
+            
+            // Skip if we already processed this segment's window
+            guard !processedSegmentIDs.contains(segmentID) else { continue }
+            processedSegmentIDs.insert(segmentID)
+            
+            // Fetch parent segment
+            let segmentDescriptor = FetchDescriptor<TranscriptSegment>()
+            let allSegments = try modelContext.fetch(segmentDescriptor)
+            guard let parentSegment = allSegments.first(where: { $0.id == segmentID }),
+                  let meeting = parentSegment.meeting else { continue }
+            
+            let meetingTitle = meetingTitles[meeting.id] ?? meeting.title
+            
+            // Fetch all segments in this meeting and sort them chronologically
+            let sortedSegments = meeting.transcriptSegments.sorted(by: { $0.startTime < $1.startTime })
+            
+            if let parentIndex = sortedSegments.firstIndex(where: { $0.id == segmentID }) {
+                // Get window of +/- 2 segments
+                let startIndex = max(0, parentIndex - 2)
+                let endIndex = min(sortedSegments.count - 1, parentIndex + 2)
+                
+                let windowSegments = sortedSegments[startIndex...endIndex]
+                
+                // Construct context block
+                var blockText = ""
+                for winSeg in windowSegments {
+                    processedSegmentIDs.insert(winSeg.id) // Avoid repeating segments in other hits
+                    blockText += "\(winSeg.displayName): \(winSeg.text)\n"
+                }
+                
+                context += """
+                [Джерело: \(meetingTitle)]
+                \(blockText.trimmingCharacters(in: .whitespacesAndNewlines))
+                
+                """
+            }
         }
         
         return (context.trimmingCharacters(in: .whitespacesAndNewlines), referenced)

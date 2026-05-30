@@ -149,7 +149,7 @@ struct RecordingView: View {
                             .foregroundStyle(Theme.Colors.textSecondary)
                     }
 
-                    ProgressView(value: viewModel.importProgressValue)
+                    ProgressView(value: viewModel.importProgressValue, total: 1.0)
                         .progressViewStyle(.linear)
                         .tint(Theme.Colors.accentPrimary)
                         .frame(maxWidth: 220)
@@ -160,7 +160,7 @@ struct RecordingView: View {
                 }
             } else if viewModel.state == .transcribing {
                 VStack(spacing: Theme.Spacing.xs) {
-                    ProgressView(value: viewModel.transcriptionProgressValue)
+                    ProgressView(value: viewModel.transcriptionProgressValue, total: 1.0)
                         .progressViewStyle(.linear)
                         .tint(Theme.Colors.accentPrimary)
                         .frame(maxWidth: 200)

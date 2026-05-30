@@ -180,4 +180,32 @@ final class MeetMindDiarizationEngineTests: XCTestCase {
         // Third segment (8.0 - 12.0) midpoint = 10.0 -> falls into SPEAKER_01 (7.5 - 15.0)
         XCTAssertEqual(aligned[2].speakerID, "SPEAKER_01")
     }
+    
+    func testOverlapBasedAlignment() async throws {
+        let engine = await MeetMindDiarizationEngine()
+        
+        // Text segment spans 1.0 to 5.0 (midpoint is 3.0)
+        let textSegments = [
+            MeetingTranscriptSegment(id: UUID(), startTime: 1.0, endTime: 5.0, text: "Overlapping conversation.", speakerID: nil, language: "en")
+        ]
+        
+        // Diarization segments:
+        // A: 0.0 - 2.8 (overlap is 1.8s)
+        // B: 2.8 - 3.2 (overlap is 0.4s, midpoint 3.0 is here)
+        // C: 3.2 - 10.0 (overlap is 1.8s)
+        let speakerSegments = [
+            DiarizationSegment(speakerID: "SPEAKER_A", startTime: 0.0, endTime: 2.8),
+            DiarizationSegment(speakerID: "SPEAKER_B", startTime: 2.8, endTime: 3.2),
+            DiarizationSegment(speakerID: "SPEAKER_C", startTime: 3.2, endTime: 10.0)
+        ]
+        
+        let aligned = await engine.alignSpeakers(textSegments: textSegments, diarizationSegments: speakerSegments)
+        
+        XCTAssertEqual(aligned.count, 1)
+        
+        // Overlap-based alignment chooses SPEAKER_C (or SPEAKER_A since they tie with 1.8s)
+        // but definitely NOT SPEAKER_B which only has 0.4s of overlap (despite containing the midpoint)
+        XCTAssertNotEqual(aligned[0].speakerID, "SPEAKER_B")
+        XCTAssertTrue(aligned[0].speakerID == "SPEAKER_C" || aligned[0].speakerID == "SPEAKER_A")
+    }
 }

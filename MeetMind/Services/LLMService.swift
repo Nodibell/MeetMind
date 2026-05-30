@@ -576,12 +576,7 @@ actor LLMService: LLMProvider {
         if provider == .appleIntelligence {
             let lang = detected ?? targetLanguage ?? "uk"
             if !isLanguageSupportedByAppleIntelligence(lang) {
-                if let fallback = await findAvailableFallbackProvider() {
-                    AppLogger.warning("Apple Intelligence не підтримує мову транскрипту '\(lang)'. Переключено на \(fallback.rawValue).")
-                    return try await generateSummaryWithProvider(fallback, transcript: transcript, targetLanguage: targetLanguage)
-                } else {
-                    throw LLMError.requestFailed("Apple Intelligence не підтримує українську мову транскрипту. Будь ласка, запустіть Ollama або налаштуйте DeepMLX для обробки української мови.")
-                }
+                throw LLMError.requestFailed("Apple Intelligence не підтримує мову транскрипту (\(lang.uppercased())).")
             }
             
             #if canImport(FoundationModels)
@@ -674,12 +669,7 @@ actor LLMService: LLMProvider {
         if provider == .appleIntelligence {
             let lang = detectLanguage(of: transcript) ?? "uk"
             if !isLanguageSupportedByAppleIntelligence(lang) {
-                if let fallback = await findAvailableFallbackProvider() {
-                    AppLogger.warning("Apple Intelligence не підтримує мову транскрипту '\(lang)'. Переключено на \(fallback.rawValue).")
-                    return try await generateTitleWithProvider(fallback, transcript: transcript)
-                } else {
-                    throw LLMError.requestFailed("Apple Intelligence не підтримує українську мову транскрипту. Будь ласка, запустіть Ollama або налаштуйте DeepMLX для обробки української мови.")
-                }
+                throw LLMError.requestFailed("Apple Intelligence не підтримує мову транскрипту (\(lang.uppercased())).")
             }
             
             #if canImport(FoundationModels)
@@ -746,12 +736,7 @@ actor LLMService: LLMProvider {
         if provider == .appleIntelligence {
             let lang = detectLanguage(of: transcript) ?? "uk"
             if !isLanguageSupportedByAppleIntelligence(lang) {
-                if let fallback = await findAvailableFallbackProvider() {
-                    AppLogger.warning("Apple Intelligence не підтримує мову транскрипту '\(lang)'. Переключено на \(fallback.rawValue).")
-                    return try await answerQuestionWithProvider(fallback, transcript: transcript, question: question, history: history)
-                } else {
-                    throw LLMError.requestFailed("Apple Intelligence не підтримує українську мову транскрипту. Будь ласка, запустіть Ollama або налаштуйте DeepMLX для обробки української мови.")
-                }
+                throw LLMError.requestFailed("Apple Intelligence не підтримує мову транскрипту (\(lang.uppercased())).")
             }
             
             #if canImport(FoundationModels)
@@ -812,7 +797,18 @@ actor LLMService: LLMProvider {
     /// Translate transcript or summary
     func translateText(text: String, to languageName: String) async throws -> String {
         AppLogger.info("Text translation request to \(languageName)")
-        let provider = await MainActor.run { AppSettings.shared.llmProvider }
+        var provider = await MainActor.run { AppSettings.shared.llmProvider }
+        
+        // If Apple Intelligence is globally selected, we must use a local LLM fallback (Ollama or DeepMLX)
+        // for LLM-based translation because Apple Intelligence doesn't support local LLM translation of Ukrainian.
+        if provider == .appleIntelligence {
+            if let fallback = await findAvailableFallbackProvider() {
+                provider = fallback
+            } else {
+                provider = .ollama
+            }
+        }
+        
         return try await translateTextWithProvider(provider, text: text, to: languageName)
     }
     
@@ -824,12 +820,7 @@ actor LLMService: LLMProvider {
             let isTargetUnsupported = languageName.lowercased().contains("укр") || languageName.lowercased().contains("ukr")
             
             if isSourceUnsupported || isTargetUnsupported {
-                if let fallback = await findAvailableFallbackProvider() {
-                    AppLogger.warning("Apple Intelligence не підтримує переклад для української мови. Переключено на \(fallback.rawValue).")
-                    return try await translateTextWithProvider(fallback, text: text, to: languageName)
-                } else {
-                    throw LLMError.requestFailed("Apple Intelligence не підтримує переклад для української мови. Будь ласка, запустіть Ollama або налаштуйте DeepMLX.")
-                }
+                throw LLMError.requestFailed("Apple Intelligence не підтримує переклад для української мови.")
             }
             
             #if canImport(FoundationModels)
@@ -896,13 +887,8 @@ actor LLMService: LLMProvider {
                     if provider == .appleIntelligence {
                         let lang = detectLanguage(of: prompt) ?? "uk"
                         if !isLanguageSupportedByAppleIntelligence(lang) {
-                            if let fallback = await findAvailableFallbackProvider() {
-                                AppLogger.warning("Apple Intelligence не підтримує мову для потокового запиту '\(lang)'. Переключено на \(fallback.rawValue).")
-                                provider = fallback
-                            } else {
-                                continuation.finish(throwing: LLMError.requestFailed("Apple Intelligence не підтримує українську мову. Будь ласка, запустіть Ollama або налаштуйте DeepMLX."))
-                                return
-                            }
+                            continuation.finish(throwing: LLMError.requestFailed("Apple Intelligence не підтримує мову транскрипту (\(lang.uppercased()))."))
+                            return
                         }
                     }
                     

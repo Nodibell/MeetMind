@@ -45,18 +45,40 @@ struct TranscriptDetailRow: View {
             // Text and Speaker
             VStack(alignment: .leading, spacing: 4) {
                 if segment.speakerID != nil {
-                    Button {
-                        newSpeakerName = metadata?.name ?? ""
-                        isEditingSpeaker = true
-                    } label: {
-                        Text(metadata?.displayName ?? segment.speakerName ?? segment.speakerID ?? String(localized: "Невідомий"))
-                            .font(Theme.Typography.caption)
-                            .fontWeight(.bold)
-                            .foregroundStyle(metadata?.color ?? Theme.Colors.accentPrimary)
-                            .padding(.bottom, 2)
+                    HStack(spacing: Theme.Spacing.sm) {
+                        Button {
+                            newSpeakerName = metadata?.name ?? ""
+                            isEditingSpeaker = true
+                        } label: {
+                            Text(metadata?.displayName ?? segment.speakerName ?? segment.speakerID ?? String(localized: "Невідомий"))
+                                .font(Theme.Typography.caption)
+                                .fontWeight(.bold)
+                                .foregroundStyle(metadata?.color ?? Theme.Colors.accentPrimary)
+                                .padding(.bottom, 2)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Натисніть, щоб перейменувати спікера")
+                        
+                        if let suggestedName = segment.suggestedSpeakerName, metadata?.name == nil {
+                            Button {
+                                onUpdateName(suggestedName)
+                            } label: {
+                                HStack(spacing: 2) {
+                                    Image(systemName: "hand.thumbsup.fill")
+                                        .font(.system(size: 9))
+                                    Text("На нашу думку, це \(suggestedName)?")
+                                        .font(.system(size: 10, weight: .medium))
+                                }
+                                .padding(.horizontal, Theme.Spacing.xs)
+                                .padding(.vertical, 2)
+                                .background(Theme.Colors.accentPrimary.opacity(0.1))
+                                .foregroundStyle(Theme.Colors.accentPrimary)
+                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                            }
+                            .buttonStyle(.plain)
+                            .help("Натисніть, щоб підтвердити пропозицію")
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .help("Натисніть, щоб перейменувати спікера")
                     .popover(isPresented: $isEditingSpeaker) {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Налаштування спікера")
