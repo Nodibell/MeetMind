@@ -17,8 +17,12 @@ final class TranscriptSegment {
     var speakerID: String?
     var speakerName: String?
     var language: String?
+    var suggestedSpeakerName: String?
     
     var meeting: Meeting?
+    
+    @Relationship(deleteRule: .cascade, inverse: \ChildEmbeddingEntity.parentSegment)
+    var childEmbeddings: [ChildEmbeddingEntity] = []
     
     init(
         id: UUID = UUID(),
@@ -27,7 +31,8 @@ final class TranscriptSegment {
         text: String,
         speakerID: String? = nil,
         speakerName: String? = nil,
-        language: String? = nil
+        language: String? = nil,
+        suggestedSpeakerName: String? = nil
     ) {
         self.id = id
         self.startTime = startTime
@@ -36,6 +41,7 @@ final class TranscriptSegment {
         self.speakerID = speakerID
         self.speakerName = speakerName
         self.language = language
+        self.suggestedSpeakerName = suggestedSpeakerName
     }
     
     var timestampRange: String {

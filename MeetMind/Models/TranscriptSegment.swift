@@ -16,6 +16,7 @@ struct MeetingTranscriptSegment: Codable, Identifiable, Sendable, Equatable {
     let speakerID: String?
     let speakerName: String?
     let language: String?
+    let suggestedSpeakerName: String?
     
     nonisolated init(
         id: UUID = UUID(),
@@ -24,7 +25,8 @@ struct MeetingTranscriptSegment: Codable, Identifiable, Sendable, Equatable {
         text: String,
         speakerID: String? = nil,
         speakerName: String? = nil,
-        language: String? = nil
+        language: String? = nil,
+        suggestedSpeakerName: String? = nil
     ) {
         self.id = id
         self.startTime = startTime
@@ -33,6 +35,7 @@ struct MeetingTranscriptSegment: Codable, Identifiable, Sendable, Equatable {
         self.speakerID = speakerID
         self.speakerName = speakerName
         self.language = language
+        self.suggestedSpeakerName = suggestedSpeakerName
     }
     
     /// Formatted timestamp range: "00:15 – 00:32"
@@ -68,6 +71,7 @@ struct MeetingTranscriptDocument: Codable, Sendable {
     let createdAt: Date
     let language: String
     let segments: [MeetingTranscriptSegment]
+    var speakerCentroids: [String: [Float]]? = nil
     
     /// Full text with no timestamps
     var fullText: String {

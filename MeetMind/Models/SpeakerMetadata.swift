@@ -6,6 +6,7 @@ struct SpeakerMetadata: Codable, Identifiable, Sendable {
     var id: String // The original speaker ID (e.g. "Speaker 0")
     var name: String? // Custom name provided by user or AI
     var colorHex: String? // Hex color code
+    var voiceCentroid: [Float]? // Voice embedding centroid for cross-meeting recognition
     
     var displayName: String {
         if let name = name, !name.isEmpty { return name }

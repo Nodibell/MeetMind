@@ -255,7 +255,7 @@ struct OnboardingView: View {
                 .fixedSize(horizontal: false, vertical: true)
             
             VStack(spacing: 10) {
-                ProgressView(value: viewModel.downloadProgress)
+                ProgressView(value: viewModel.downloadProgress, total: 1.0)
                     .progressViewStyle(.linear)
                 
                 Text(viewModel.downloadProgress.rounded(), format: .percent)

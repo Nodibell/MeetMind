@@ -137,7 +137,8 @@ extension Meeting {
                     text: seg.text,
                     speakerID: seg.speakerID,
                     speakerName: seg.speakerName,
-                    language: seg.language
+                    language: seg.language,
+                    suggestedSpeakerName: seg.suggestedSpeakerName
                 )
                 segment.meeting = self
                 transcriptSegments.append(segment)

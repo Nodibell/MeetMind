@@ -99,6 +99,18 @@ final class MeetingRepository {
         // 1. Sync TranscriptSegments from JSON
         if let url = meeting.transcriptURL,
            let doc = try? MeetingTranscriptDocument.load(from: url) {
+            
+            // Sync speaker centroids to meeting metadata
+            if let centroids = doc.speakerCentroids {
+                for (speakerID, centroid) in centroids {
+                    if let index = meeting.speakerMetadata.firstIndex(where: { $0.id == speakerID }) {
+                        meeting.speakerMetadata[index].voiceCentroid = centroid
+                    } else {
+                        meeting.speakerMetadata.append(SpeakerMetadata(id: speakerID, name: nil, colorHex: nil, voiceCentroid: centroid))
+                    }
+                }
+            }
+
             meeting.transcriptSegments.forEach { context.delete($0) }
             meeting.transcriptSegments.removeAll()
 
@@ -110,7 +122,8 @@ final class MeetingRepository {
                     text: seg.text,
                     speakerID: seg.speakerID,
                     speakerName: seg.speakerName,
-                    language: seg.language
+                    language: seg.language,
+                    suggestedSpeakerName: seg.suggestedSpeakerName
                 )
                 segment.meeting = meeting
                 meeting.transcriptSegments.append(segment)

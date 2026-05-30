@@ -522,10 +522,34 @@ final class MeetingDetailViewModel {
     // MARK: - Speaker Management
     
     func updateSpeakerName(id: String, newName: String) {
+        let trimmedName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        
         if let index = meeting.speakerMetadata.firstIndex(where: { $0.id == id }) {
-            meeting.speakerMetadata[index].name = newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : newName
+            meeting.speakerMetadata[index].name = trimmedName.isEmpty ? nil : trimmedName
+            
+            // If we have a voice centroid for this speaker, save/update the SpeakerProfile globally
+            if !trimmedName.isEmpty, let centroid = meeting.speakerMetadata[index].voiceCentroid {
+                Task {
+                    let store = await SpeakerProfileStore.shared
+                    let result = await store.findMatchingProfileWithSuggestion(for: centroid)
+                    if let existingProfile = result.profile {
+                        // Update existing voice profile's name
+                        await MainActor.run {
+                            existingProfile.name = trimmedName
+                            existingProfile.lastSeenAt = Date()
+                        }
+                    } else {
+                        // Create a brand new global voice profile
+                        _ = await store.createProfile(
+                            name: trimmedName,
+                            colorHex: meeting.speakerMetadata[index].colorHex ?? "7266F2",
+                            centroid: centroid
+                        )
+                    }
+                }
+            }
         } else {
-            meeting.speakerMetadata.append(SpeakerMetadata(id: id, name: newName, colorHex: nil))
+            meeting.speakerMetadata.append(SpeakerMetadata(id: id, name: trimmedName.isEmpty ? nil : trimmedName, colorHex: nil))
         }
         repository?.trySave()
     }

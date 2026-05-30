@@ -294,7 +294,7 @@ struct TranscriptPanelView: View {
                     .font(Theme.Typography.bodyMedium)
                     .foregroundStyle(Theme.Colors.textPrimary)
                 
-                ProgressView(value: transcriptionProgress)
+                ProgressView(value: transcriptionProgress, total: 1.0)
                     .progressViewStyle(.linear)
                     .tint(Theme.Colors.accentPrimary)
                     .frame(width: 200)

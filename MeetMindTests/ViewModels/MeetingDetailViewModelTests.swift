@@ -214,6 +214,22 @@ final class MeetingDetailViewModelTests: XCTestCase {
         XCTAssertNil(meeting.speakerMetadata[0].name)
     }
 
+    func testUpdateSpeakerName_withCentroid_createsGlobalProfile() async throws {
+        let mockCentroid = Array(repeating: Float(0.1), count: 192)
+        meeting.speakerMetadata = [SpeakerMetadata(id: "Speaker 1", name: nil, colorHex: nil, voiceCentroid: mockCentroid)]
+        
+        sut.updateSpeakerName(id: "Speaker 1", newName: "Олексій")
+        
+        try await Task.sleep(nanoseconds: 50_000_000) // 50ms
+        
+        let store = SpeakerProfileStore.shared
+        let profiles = store.getAllProfiles()
+        
+        XCTAssertEqual(profiles.count, 1)
+        XCTAssertEqual(profiles.first?.name, "Олексій")
+        XCTAssertEqual(profiles.first?.voiceCentroid, mockCentroid)
+    }
+
     // MARK: - Chat
 
     func testCancelChat_setsIsChattingFalse() {
