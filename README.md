@@ -44,7 +44,7 @@
 ### Installation
 
 #### Option 1: Quick Install (Recommended)
-1. Download the latest packaged release disk image: **[MeetMind_v1.5.0.dmg](https://github.com/Nodibell/MeetMind/releases/download/v1.5.0/MeetMind_v1.5.0.dmg)**.
+1. Download the latest packaged release disk image: **[MeetMind_v1.5.1.dmg](https://github.com/Nodibell/MeetMind/releases/download/v1.5.1/MeetMind_v1.5.1.dmg)**.
 2. Open the `.dmg` file and drag **MeetMind** to your **Applications** folder.
 
 #### Option 2: Build from Source
