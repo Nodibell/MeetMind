@@ -882,7 +882,7 @@ actor LLMService: LLMProvider {
         return AsyncThrowingStream { continuation in
             Task {
                 do {
-                    var provider = await MainActor.run { AppSettings.shared.llmProvider }
+                    let provider = await MainActor.run { AppSettings.shared.llmProvider }
                     
                     if provider == .appleIntelligence {
                         let lang = detectLanguage(of: prompt) ?? "uk"

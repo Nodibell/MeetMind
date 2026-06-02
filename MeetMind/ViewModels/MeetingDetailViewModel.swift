@@ -399,9 +399,15 @@ final class MeetingDetailViewModel {
                 case .error(let msg):
                     self.transcriptionStatusText = msg
                 case .transcribing(let progress):
-                    // Transcription occupies second half of the bar (50% → 100%)
-                    self.transcriptionProgressValue = 0.5 + progress * 0.5
+                    // Transcription occupies second half of the bar (50% → 90%)
+                    self.transcriptionProgressValue = 0.5 + progress * 0.4
                     self.transcriptionStatusText = String(localized: "Транскрипція...")
+                case .preparingDiarization:
+                    self.transcriptionStatusText = String(localized: "Підготовка моделей розпізнавання спікерів...")
+                    self.transcriptionProgressValue = 0.90
+                case .diarizing:
+                    self.transcriptionStatusText = String(localized: "Розпізнавання спікерів (діаризація)...")
+                    self.transcriptionProgressValue = 0.95
                 default:
                     break
                 }
@@ -529,18 +535,16 @@ final class MeetingDetailViewModel {
             
             // If we have a voice centroid for this speaker, save/update the SpeakerProfile globally
             if !trimmedName.isEmpty, let centroid = meeting.speakerMetadata[index].voiceCentroid {
-                Task {
-                    let store = await SpeakerProfileStore.shared
-                    let result = await store.findMatchingProfileWithSuggestion(for: centroid)
+                Task { @MainActor in
+                    let store = SpeakerProfileStore.shared
+                    let result = store.findMatchingProfileWithSuggestion(for: centroid)
                     if let existingProfile = result.profile {
                         // Update existing voice profile's name
-                        await MainActor.run {
-                            existingProfile.name = trimmedName
-                            existingProfile.lastSeenAt = Date()
-                        }
+                        existingProfile.name = trimmedName
+                        existingProfile.lastSeenAt = Date()
                     } else {
                         // Create a brand new global voice profile
-                        _ = await store.createProfile(
+                        _ = store.createProfile(
                             name: trimmedName,
                             colorHex: meeting.speakerMetadata[index].colorHex ?? "7266F2",
                             centroid: centroid

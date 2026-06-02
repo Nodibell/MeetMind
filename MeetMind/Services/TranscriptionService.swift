@@ -18,6 +18,8 @@ actor TranscriptionService: TranscriptionProvider {
         case loading
         case ready
         case transcribing(progress: Double)
+        case preparingDiarization
+        case diarizing
         case error(String)
     }
 
@@ -272,12 +274,14 @@ actor TranscriptionService: TranscriptionProvider {
 
             // 3. Diarization (Speaker Recognition) via FluidAudio
             AppLogger.ai("Starting FluidAudio speaker diarization...")
+            updateState(.preparingDiarization)
             let diarizationEngine = await MeetMindDiarizationEngine()
             var segments = convertResults(results, offset: 0)
             var centroidsToSave: [String: [Float]]? = nil
 
             do {
                 try await diarizationEngine.prepareModels()
+                updateState(.diarizing)
                 let (diarizationSegments, centroids) = try await diarizationEngine.diarize(fileURL: url)
                 centroidsToSave = centroids
                 segments = diarizationEngine.alignSpeakers(

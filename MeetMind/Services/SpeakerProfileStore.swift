@@ -92,19 +92,6 @@ final class SpeakerProfileStore {
     }
     
     private func cosineSimilarity(_ a: [Float], _ b: [Float]) -> Float {
-        guard a.count == b.count, !a.isEmpty else { return 0 }
-        
-        var dotProduct: Float = 0
-        var normA: Float = 0
-        var normB: Float = 0
-        
-        for i in 0..<a.count {
-            dotProduct += a[i] * b[i]
-            normA += a[i] * a[i]
-            normB += b[i] * b[i]
-        }
-        
-        let denom = sqrt(normA) * sqrt(normB)
-        return denom == 0 ? 0 : dotProduct / denom
+        VectorMath.cosineSimilarity(a, b)
     }
 }

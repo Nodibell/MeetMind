@@ -305,7 +305,7 @@ struct ContentView: View {
                 featureRow(icon: "brain.head.profile",  title: "AI Аналіз",      subtitle: "Ollama — резюме та завдання")
                 featureRow(icon: "doc.text",            title: "Obsidian",       subtitle: "Автоматичний експорт нотаток")
             }
-            .frame(maxWidth: 320)
+            .frame(width: 260)
 
             Button {
                 router.startNewRecording()

@@ -91,10 +91,35 @@ struct TranscriptDetailRow: View {
                                     isEditingSpeaker = false
                                 }
                             
-                            ColorPicker("Колір", selection: Binding(
-                                get: { metadata?.color ?? Theme.Colors.accentPrimary },
-                                set: { onUpdateColor($0) }
-                             ))
+                            Text("Колір спікера")
+                                .font(Theme.Typography.caption)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(Theme.Colors.textSecondary)
+                            
+                            HStack(spacing: Theme.Spacing.sm) {
+                                ForEach([
+                                    "7266F2", // Purple
+                                    "1E88E5", // Ocean Blue
+                                    "43A047", // Emerald Green
+                                    "FB8C00", // Sunset Orange
+                                    "D81B60", // Rose Pink
+                                    "E53935"  // Coral Red
+                                ], id: \.self) { hex in
+                                    Circle()
+                                        .fill(Color(hex: hex))
+                                        .frame(width: 20, height: 20)
+                                        .overlay(
+                                            Circle()
+                                                .stroke(Color.white, lineWidth: (metadata?.colorHex ?? "7266F2") == hex ? 2 : 0)
+                                        )
+                                        .shadow(color: Color.black.opacity(0.15), radius: 2)
+                                        .onTapGesture {
+                                            onUpdateColor(Color(hex: hex))
+                                        }
+                                        .help("Вибрати цей колір для спікера")
+                                }
+                            }
+                            .padding(.vertical, 4)
                             
                             HStack {
                                 Button("Скинути") {

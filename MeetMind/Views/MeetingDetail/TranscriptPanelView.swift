@@ -28,17 +28,38 @@ struct TranscriptPanelView: View {
     
     @State private var highlightedSegmentID: UUID?
     @State private var activeSegmentID: UUID?
+    @State private var isAutoScrollEnabled = true
     
     var body: some View {
         VStack(spacing: 0) {
             // Header
-            HStack {
+            HStack(spacing: Theme.Spacing.md) {
                 Label("Транскрипт", systemImage: "text.quote")
                     .font(Theme.Typography.headline)
                     .foregroundStyle(Theme.Colors.textPrimary)
                     .fixedSize(horizontal: true, vertical: false)
                 
                 Spacer()
+                
+                // Auto-scroll toggle
+                Button(action: {
+                    withAnimation(Theme.Animation.fast) {
+                        isAutoScrollEnabled.toggle()
+                    }
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: isAutoScrollEnabled ? "lock.fill" : "lock.open.fill")
+                        Text(isAutoScrollEnabled ? "Автоскрол" : "Ручний скрол")
+                    }
+                    .font(Theme.Typography.caption)
+                    .foregroundStyle(isAutoScrollEnabled ? Theme.Colors.accentPrimary : Theme.Colors.textSecondary)
+                    .padding(.horizontal, Theme.Spacing.sm)
+                    .padding(.vertical, Theme.Spacing.xxs)
+                    .background(isAutoScrollEnabled ? Theme.Colors.accentPrimary.opacity(0.1) : Theme.Colors.backgroundTertiary)
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.CornerRadius.sm))
+                }
+                .buttonStyle(.plain)
+                .help("Автоматично прокручувати список реплік під час відтворення")
                 
                 // Search
                 HStack(spacing: Theme.Spacing.xs) {
@@ -217,7 +238,7 @@ struct TranscriptPanelView: View {
                 }
             }
             .onChange(of: activeSegmentID) { _, newID in
-                if let newID, AudioPlaybackManager.shared.isPlaying {
+                if isAutoScrollEnabled, let newID, AudioPlaybackManager.shared.isPlaying {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         proxy.scrollTo(newID, anchor: .center)
                     }

@@ -65,7 +65,10 @@ actor ModelMemoryManager {
     /// Evict all stale transient buffers and heaps from Metal VRAM cache to reclaim GPU memory
     private func purgeMetalCache() {
         guard let device = MTLCreateSystemDefaultDevice() else { return }
-        device.makeCommandQueue()?.insertDebugCaptureBoundary()
+        // Capture boundaries are managed via MTLCaptureManager in macOS 10.13+
+        let scope = MTLCaptureManager.shared().makeCaptureScope(device: device)
+        scope.begin()
+        scope.end()
         AppLogger.info("🧠 ModelMemoryManager: Purged Metal GPU command buffers successfully.")
     }
 }

@@ -140,7 +140,12 @@ final class AppSettings: @unchecked Sendable {
     }
 
     var llmProvider: LLMProvider {
-        didSet { UserDefaults.standard.set(llmProvider.rawValue, forKey: Keys.llmProvider) }
+        didSet {
+            UserDefaults.standard.set(llmProvider.rawValue, forKey: Keys.llmProvider)
+            if llmProvider == .appleIntelligence || llmProvider == .deepMLX {
+                useBuiltInEmbedding = true
+            }
+        }
     }
 
     var llmModel: String {
@@ -291,6 +296,7 @@ final class AppSettings: @unchecked Sendable {
             useBuiltInEmbedding = true // Default to true for premium, out-of-the-box RAG
         }
         
+        
         if let epStr = UserDefaults.standard.string(forKey: Keys.llmEmbeddingProvider),
            let ep = LLMProvider(rawValue: epStr),
            ep == .ollama || ep == .lmStudio {
@@ -324,6 +330,10 @@ final class AppSettings: @unchecked Sendable {
         obsidianVaultPath = AppSettings.resolveBookmark(forKey: Keys.obsidianVaultPath)
         watchFolderPath   = AppSettings.resolveBookmark(forKey: Keys.watchFolderPath)
         deepMLXModelPath  = AppSettings.resolveBookmark(forKey: Keys.deepMLXModelPath)
+
+        if llmProvider == .appleIntelligence || llmProvider == .deepMLX {
+            useBuiltInEmbedding = true
+        }
     }
 
     // MARK: - Bookmark Helpers

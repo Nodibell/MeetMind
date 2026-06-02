@@ -45,6 +45,15 @@ final class MeetingListViewModel {
             try? fm.removeItem(atPath: summaryPath)
         }
         
+        // Clean up FTS search index entries to prevent SQLite database leakage and bloat
+        let segmentIDs = meeting.transcriptSegments.map { $0.id }
+        if !segmentIDs.isEmpty {
+            Task {
+                let vectorStore = VectorStore()
+                await vectorStore.clearFTSIndex(for: segmentIDs)
+            }
+        }
+        
         modelContext?.delete(meeting)
         try? modelContext?.save()
     }
