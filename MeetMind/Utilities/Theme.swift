@@ -251,8 +251,19 @@ extension View {
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(Theme.Colors.border.opacity(0.5), lineWidth: 0.5)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.15),
+                                Color.white.opacity(0.05)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 0.5
+                    )
             )
+            .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 4)
     }
     
     func cardStyle() -> some View {

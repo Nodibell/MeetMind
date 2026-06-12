@@ -34,8 +34,9 @@ final class VectorStoreTests: XCTestCase {
         XCTAssertEqual(similarity, -1.0, accuracy: 0.0001)
     }
     
+    @MainActor
     func testVectorStoreRetrievesTopMatches() async {
-        let store = VectorStore()
+        let store = await VectorStore()
         
         let items = [
             VectorItem(id: UUID(), meetingID: UUID(), textChunk: "Apple", vector: [1.0, 0.0], startIndex: 0),

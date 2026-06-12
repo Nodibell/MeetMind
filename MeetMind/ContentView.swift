@@ -206,6 +206,7 @@ struct ContentView: View {
                 }
             ),
             viewModel: meetingListVM,
+            recordingVM: recordingVM,
             onNewRecording: {
                 router.startNewRecording()
                 recordingVM?.resetForNewRecording()
@@ -220,32 +221,130 @@ struct ContentView: View {
 
     @ViewBuilder
     private var detailContent: some View {
-        switch router.current {
-        case .globalSearch:
-            GlobalSearchView(llmService: llmService)
-
-        case .actionItems:
-            ActionItemsView()
-
-        case .recording:
-            recordingDetail
-
-        case .meeting(let id, let segmentID):
-            MeetingDetailForID(
-                meetingID: id,
-                highlightedSegmentID: segmentID,
-                llmService: llmService,
-                transcriptionService: transcriptionService
-            )
-
-        case .groupChat(let id):
-            GroupChatViewForID(groupID: id, llmService: llmService) { meetingID, segmentID in
-                router.navigate(to: .meeting(meetingID, highlightedSegmentID: segmentID))
+        VStack(spacing: 0) {
+            // Background transcription banner — visible from any screen while processing
+            if let vm = recordingVM, !router.isShowingRecording {
+                backgroundProcessingBanner(vm: vm)
             }
 
-        case .welcome:
-            welcomeView
+            switch router.current {
+            case .globalSearch:
+                GlobalSearchView(llmService: llmService)
+
+            case .actionItems:
+                ActionItemsView()
+
+            case .recording:
+                recordingDetail
+
+            case .meeting(let id, let segmentID):
+                MeetingDetailForID(
+                    meetingID: id,
+                    highlightedSegmentID: segmentID,
+                    llmService: llmService,
+                    transcriptionService: transcriptionService
+                )
+
+            case .groupChat(let id):
+                GroupChatViewForID(groupID: id, llmService: llmService) { meetingID, segmentID in
+                    router.navigate(to: .meeting(meetingID, highlightedSegmentID: segmentID))
+                }
+
+            case .welcome:
+                welcomeView
+            }
         }
+    }
+
+    @ViewBuilder
+    private func backgroundProcessingBanner(vm: RecordingViewModel) -> some View {
+        if vm.state == .preparing || vm.state == .extracting || vm.state == .transcribing || vm.state == .summarizing {
+            processingBannerRow(
+                icon: currentStageIcon(for: vm.state),
+                label: currentStageLabel(for: vm.state, vm: vm),
+                progress: vm.overallProgress,
+                vm: vm
+            )
+        } else {
+            EmptyView()
+        }
+    }
+    
+    private func currentStageIcon(for state: RecordingViewModel.RecordingState) -> String {
+        switch state {
+        case .preparing: return "cpu"
+        case .extracting: return "arrow.down.circle"
+        case .transcribing: return "text.viewfinder"
+        case .summarizing: return "sparkles"
+        default: return "hourglass"
+        }
+    }
+    
+    private func currentStageLabel(for state: RecordingViewModel.RecordingState, vm: RecordingViewModel) -> String {
+        switch state {
+        case .preparing: return String(localized: "Підготовка...")
+        case .extracting: return vm.importProgressStage.isEmpty ? String(localized: "Вилучення аудіо...") : vm.importProgressStage
+        case .transcribing: return vm.transcriptionProgressText.isEmpty ? String(localized: "Транскрипція...") : vm.transcriptionProgressText
+        case .summarizing: return String(localized: "Генерація резюме...")
+        default: return String(localized: "Обробка...")
+        }
+    }
+
+    private func processingBannerRow(
+        icon: String,
+        label: String,
+        progress: Double?,
+        vm: RecordingViewModel
+    ) -> some View {
+        Button {
+            router.startNewRecording()
+        } label: {
+            HStack(spacing: Theme.Spacing.sm) {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.Colors.accentPrimary)
+
+                Text(label)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Theme.Colors.textPrimary)
+                    .lineLimit(1)
+
+                if let progress {
+                    ProgressView(value: progress, total: 1.0)
+                        .progressViewStyle(.linear)
+                        .tint(Theme.Colors.accentPrimary)
+                        .frame(maxWidth: 100)
+
+                    Text(String(format: "%.0f%%", progress * 100))
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(Theme.Colors.accentPrimary)
+                        .frame(width: 32, alignment: .trailing)
+                } else {
+                    ProgressView()
+                        .progressViewStyle(.linear)
+                        .tint(Theme.Colors.accentPrimary)
+                        .frame(maxWidth: 80)
+                }
+
+                Spacer(minLength: 0)
+
+                HStack(spacing: 4) {
+                    Text("Переглянути")
+                        .font(.system(size: 11, weight: .medium))
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                }
+                .foregroundStyle(Theme.Colors.accentPrimary)
+            }
+            .padding(.horizontal, Theme.Spacing.lg)
+            .padding(.vertical, 7)
+        }
+        .buttonStyle(.plain)
+        .background(Theme.Colors.accentPrimary.opacity(0.07))
+        .overlay(alignment: .bottom) {
+            Divider().background(Theme.Colors.accentPrimary.opacity(0.2))
+        }
+        .transition(.move(edge: .top).combined(with: .opacity))
     }
 
     @ViewBuilder
@@ -373,20 +472,15 @@ struct ContentView: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         
         router.startNewRecording()
-        
-        Task {
-            await recordingVM?.processImportedFile(at: url)
-        }
+        recordingVM?.processImportedFile(at: url)
     }
 
     private func handleDroppedFile(at url: URL) {
         let supportedExtensions: Set<String> = ["wav", "mp3", "m4a", "flac", "aac", "mp4", "mov", "m4v", "mkv", "avi", "caf", "opus", "ogg"]
         guard supportedExtensions.contains(url.pathExtension.lowercased()) else { return }
         
-        Task { @MainActor in
-            router.startNewRecording()
-            await recordingVM?.processImportedFile(at: url)
-        }
+        router.startNewRecording()
+        recordingVM?.processImportedFile(at: url)
     }
 
     private func setupViewModels() {

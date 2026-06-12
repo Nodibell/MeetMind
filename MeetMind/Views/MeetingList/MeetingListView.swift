@@ -17,6 +17,7 @@ struct MeetingListView: View {
     
     @Binding var selectedMeetingID: UUID?
     @Bindable var viewModel: MeetingListViewModel
+    var recordingVM: RecordingViewModel?
     var onNewRecording: () -> Void
     var onImportFile: () -> Void
 
@@ -184,22 +185,44 @@ struct MeetingListView: View {
         .sheet(isPresented: $isShowingCreateGroup) {
             createGroupSheet
         }
-        .alert("Видалити нараду?", isPresented: Binding(
-            get: { meetingToDelete != nil },
-            set: { if !$0 { meetingToDelete = nil } }
-        )) {
+        .alert(
+            meetingToDelete.map { isTranscriptionRunning(for: $0) } == true ? "Зупинити та видалити запис?" : "Видалити нараду?",
+            isPresented: Binding(
+                get: { meetingToDelete != nil },
+                set: { if !$0 { meetingToDelete = nil } }
+            )
+        ) {
             Button("Скасувати", role: .cancel) { meetingToDelete = nil }
             Button("Видалити", role: .destructive) {
                 if let m = meetingToDelete {
                     if selectedMeetingID == m.id { selectedMeetingID = nil }
-                    viewModel.deleteMeeting(m)
+                    if isTranscriptionRunning(for: m) {
+                        recordingVM?.cancelActiveProcessing()
+                    } else {
+                        viewModel.deleteMeeting(m)
+                    }
                     meetingToDelete = nil
                 }
             }
         } message: {
             if let m = meetingToDelete {
-                Text("Нарада «\(m.title)» буде видалена разом з аудіозаписом і транскриптом. Цю дію не можна скасувати.")
+                if isTranscriptionRunning(for: m) {
+                    Text("Зараз триває запис або транскрибування цієї наради. Якщо ви видалите її, процес буде зупинено, а всі отримані дані (запис та транскрипт) буде видалено безповоротно.")
+                } else {
+                    Text("Нарада «\(m.title)» буде видалена разом з аудіозаписом і транскриптом. Цю дію не можна скасувати.")
+                }
             }
+        }
+    }
+    
+    private func isTranscriptionRunning(for meeting: Meeting) -> Bool {
+        guard let recordingVM = recordingVM else { return false }
+        guard recordingVM.currentMeeting?.id == meeting.id else { return false }
+        switch recordingVM.state {
+        case .preparing, .extracting, .recording, .stopping, .transcribing, .summarizing:
+            return true
+        default:
+            return false
         }
     }
     

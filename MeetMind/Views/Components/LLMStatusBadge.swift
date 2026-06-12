@@ -44,9 +44,9 @@ struct LLMStatusBadge: View {
     @State private var checkColor: Color = .gray
 
     var body: some View {
-        Button {
+        Button(action: {
             isShowingPopover = true
-        } label: {
+        }) {
             HStack(spacing: 6) {
                 // Status dot + Radar pulse glow stack
                 ZStack {
@@ -96,16 +96,10 @@ struct LLMStatusBadge: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(isHovered ? Color.primary.opacity(0.08) : Color.clear)
-            )
-            .scaleEffect(isHovered ? 1.02 : 1.0)
-            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isHovered)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            isHovered = hovering
             if hovering {
                 NSCursor.pointingHand.push()
             } else {
@@ -115,6 +109,8 @@ struct LLMStatusBadge: View {
         .popover(isPresented: $isShowingPopover, arrowEdge: .bottom) {
             popoverContent
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(modelName.map { "Локальний інтелект: \(providerLabel), модель \($0)" } ?? "Локальний інтелект: \(providerLabel)")
         .onAppear {
             isPulsing = isGenerating
             if isGenerating {
@@ -137,7 +133,7 @@ struct LLMStatusBadge: View {
         VStack(spacing: 0) {
             // Header
             HStack(spacing: 8) {
-                Image(systemName: "brain.headlight")
+                Image(systemName: "brain")
                     .font(.system(size: 15))
                     .foregroundStyle(Theme.Gradients.accent)
                 
@@ -410,9 +406,11 @@ struct LLMStatusBadge: View {
             .background(Theme.Colors.backgroundSecondary.opacity(0.5))
         }
         .frame(width: 290)
+        .fixedSize(horizontal: false, vertical: true)
         .background(
             VisualEffectView(material: .popover, blendingMode: .withinWindow)
         )
+        .clipShape(RoundedRectangle(cornerRadius: 12))
         .onAppear {
             Task { await checkConnection() }
         }

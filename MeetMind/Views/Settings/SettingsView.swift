@@ -43,7 +43,7 @@ struct SettingsView: View {
             Section("Зовнішній вигляд та Мова") {
                 Picker("Мова інтерфейсу", selection: $viewModel.settings.appLanguage) {
                     Text("Українська").tag("uk")
-                    Text("English").tag("en")
+                    Text("Англійська").tag("en")
                 }
                 
                 Picker("Тема оформлення", selection: $viewModel.settings.appTheme) {
@@ -72,7 +72,6 @@ struct SettingsView: View {
             Section("Модель Whisper") {
                 TextField("Live (швидка)", text: $viewModel.settings.whisperModelLive)
                 TextField("Post-processing (якісна)", text: $viewModel.settings.whisperModelPost)
-
                 Text("large-v3-turbo для live, large-v3 для якісної транскрипції")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -525,3 +524,4 @@ struct SettingsView: View {
         .padding()
     }
 }
+

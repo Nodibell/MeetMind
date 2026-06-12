@@ -41,6 +41,62 @@ final class MeetingDetailViewModel {
     var isTranscribing: Bool = false
     var transcriptionProgressValue: Double = 0.0
     var transcriptionStatusText: String = ""
+    var transcriptionServiceState: TranscriptionService.ServiceState = .notReady
+
+    var overallProgress: Double {
+        if isTranscribing {
+            let transProgress = progressFor(transcriptionServiceState)
+            // Map [0.0, 1.0] of transcription phase to [0.0, 0.90]
+            return transProgress * 0.90
+        } else if isLoadingSummary || isRegeneratingSummary {
+            return 0.95
+        } else {
+            return 0.0
+        }
+    }
+    
+    private func progressFor(_ serviceState: TranscriptionService.ServiceState) -> Double {
+        switch serviceState {
+        case .notReady:
+            return 0.0
+        case .downloading(let progress):
+            return progress * 0.08
+        case .loading:
+            return 0.09
+        case .ready:
+            return 0.10
+        case .transcribing(let progress):
+            return 0.10 + progress * 0.80
+        case .preparingDiarization:
+            return 0.92
+        case .diarizing:
+            return 0.95
+        case .error:
+            return 0.0
+        }
+    }
+    
+    var transcriptionProgressText: String {
+        switch transcriptionServiceState {
+        case .downloading(let progress):
+            let percentInt = Int(round(progress * 100))
+            return String(localized: "Завантаження моделі: \(percentInt)%")
+        case .loading:
+            return String(localized: "Ініціалізація моделі AI...")
+        case .ready:
+            return ""
+        case .transcribing(let progress):
+            return String(localized: "Транскрибування...")
+        case .preparingDiarization:
+            return String(localized: "Підготовка діаризації...")
+        case .diarizing:
+            return String(localized: "Розпізнавання спікерів...")
+        case .error(let msg):
+            return msg
+        default:
+            return ""
+        }
+    }
     
     // MARK: - Services
     private let llmService: any LLMProvider
@@ -48,6 +104,13 @@ final class MeetingDetailViewModel {
     private var modelContext: ModelContext?
     private var repository: MeetingRepository?
     private let exportUseCase = ExportMeetingUseCase()
+    private var stateObserver: NSObjectProtocol?
+    
+    deinit {
+        if let stateObserver {
+            NotificationCenter.default.removeObserver(stateObserver)
+        }
+    }
     private var summaryTask: Task<Void, Never>?
     
     // MARK: - Computed
@@ -379,38 +442,53 @@ final class MeetingDetailViewModel {
         isTranscribing = true
         transcriptionProgressValue = 0.0
         transcriptionStatusText = String(localized: "Ініціалізація...")
+        transcriptionServiceState = .notReady
         errorMessage = nil
         
-        // Setup transcription service callback
-        await transcriptionService.setOnStateChanged { [weak self] newState in
-            guard let self else { return }
-            Task { @MainActor in
-                switch newState {
-                case .downloading(let progress):
-                    let percentInt = Int(round(progress * 100))
-                    self.transcriptionStatusText = String(localized: "Завантаження моделі: \(percentInt)%")
-                    // Show download progress in first half of the bar (0% → 50%)
-                    self.transcriptionProgressValue = progress * 0.5
-                case .loading:
-                    self.transcriptionStatusText = String(localized: "Ініціалізація моделі AI...")
-                    self.transcriptionProgressValue = 0.5
-                case .ready:
-                    self.transcriptionStatusText = String(localized: "Готово")
-                case .error(let msg):
-                    self.transcriptionStatusText = msg
-                case .transcribing(let progress):
-                    // Transcription occupies second half of the bar (50% → 90%)
-                    self.transcriptionProgressValue = 0.5 + progress * 0.4
-                    self.transcriptionStatusText = String(localized: "Транскрипція...")
-                case .preparingDiarization:
-                    self.transcriptionStatusText = String(localized: "Підготовка моделей розпізнавання спікерів...")
-                    self.transcriptionProgressValue = 0.90
-                case .diarizing:
-                    self.transcriptionStatusText = String(localized: "Розпізнавання спікерів (діаризація)...")
-                    self.transcriptionProgressValue = 0.95
-                default:
-                    break
-                }
+        if let stateObserver {
+            NotificationCenter.default.removeObserver(stateObserver)
+        }
+        
+        stateObserver = NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("TranscriptionServiceStateChanged"),
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self = self,
+                  let newState = notification.userInfo?["state"] as? TranscriptionService.ServiceState else { return }
+            
+            self.transcriptionServiceState = newState
+            
+            switch newState {
+            case .downloading(let progress):
+                let percentInt = Int(round(progress * 100))
+                self.transcriptionStatusText = String(localized: "Завантаження моделі: \(percentInt)%")
+                self.transcriptionProgressValue = progress * 0.5
+            case .loading:
+                self.transcriptionStatusText = String(localized: "Ініціалізація моделі AI...")
+                self.transcriptionProgressValue = 0.5
+            case .ready:
+                self.transcriptionStatusText = String(localized: "Готово")
+            case .error(let msg):
+                self.transcriptionStatusText = msg
+            case .transcribing(let progress):
+                self.transcriptionProgressValue = 0.5 + progress * 0.4
+                self.transcriptionStatusText = String(localized: "Транскрипція...")
+            case .preparingDiarization:
+                self.transcriptionStatusText = String(localized: "Підготовка моделей розпізнавання спікерів...")
+                self.transcriptionProgressValue = 0.90
+            case .diarizing:
+                self.transcriptionStatusText = String(localized: "Розпізнавання спікерів (діаризація)...")
+                self.transcriptionProgressValue = 0.95
+            default:
+                break
+            }
+        }
+        
+        defer {
+            if let stateObserver = self.stateObserver {
+                NotificationCenter.default.removeObserver(stateObserver)
+                self.stateObserver = nil
             }
         }
         

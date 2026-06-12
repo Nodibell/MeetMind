@@ -335,10 +335,24 @@ final class RecordingViewModelTests: XCTestCase {
         XCTAssertEqual(sut.state, .recording)
     }
 
-    func testStopRecording_whenNotRecording_doesNothing() {
-        sut.state = .idle
-        sut.stopRecording()
+    func testCancelActiveProcessing_resetsStateAndClearsMeeting() {
+        let meeting = Meeting(title: "Тест")
+        sut.state = .recording
+        sut.currentMeeting = meeting
+        
+        let container = try! ModelContainer(for: Meeting.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        sut.setModelContext(container.mainContext)
+        try! container.mainContext.insert(meeting)
+        try! container.mainContext.save()
+        
+        sut.cancelActiveProcessing()
+        
         XCTAssertEqual(sut.state, .idle)
+        XCTAssertNil(sut.currentMeeting)
+        
+        let descriptor = FetchDescriptor<Meeting>()
+        let count = try! container.mainContext.fetchCount(descriptor)
+        XCTAssertEqual(count, 0)
     }
 }
 
@@ -458,6 +472,7 @@ final class MeetingDetailViewModelTests: XCTestCase {
 
 // MARK: - SettingsViewModelTests
 
+@MainActor
 final class SettingsViewModelTests: XCTestCase {
 
     var llmMock: UniqueMockLLMProvider!

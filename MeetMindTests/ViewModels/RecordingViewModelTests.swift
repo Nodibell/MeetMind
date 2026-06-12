@@ -50,7 +50,7 @@ final class MockAudioProvider: AudioProvider, @unchecked Sendable {
 // MARK: - RecordingViewModelTests
 
 @MainActor
-final class RecordingViewModelTests: XCTestCase {
+final class RecordingViewModelDetailedTests: XCTestCase {
 
     var audioMock: MockAudioProvider!
     var transcriptionMock: MockTranscriptionProvider!
@@ -205,6 +205,32 @@ final class RecordingViewModelTests: XCTestCase {
                 }
             }
         }
+    }
+
+    // MARK: - cancelActiveProcessing
+
+    func testCancelActiveProcessing_resetsStateAndClearsMeeting() {
+        // Arrange
+        let meeting = Meeting(title: "Тест")
+        sut.state = .recording
+        sut.currentMeeting = meeting
+        
+        let container = try! ModelContainer(for: Meeting.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        sut.setModelContext(container.mainContext)
+        try! container.mainContext.insert(meeting)
+        try! container.mainContext.save()
+        
+        // Act
+        sut.cancelActiveProcessing()
+        
+        // Assert
+        XCTAssertEqual(sut.state, .idle)
+        XCTAssertNil(sut.currentMeeting)
+        
+        // Verify it was deleted from context
+        let descriptor = FetchDescriptor<Meeting>()
+        let count = try! container.mainContext.fetchCount(descriptor)
+        XCTAssertEqual(count, 0)
     }
 }
 

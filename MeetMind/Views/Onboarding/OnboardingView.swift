@@ -14,6 +14,13 @@ final class OnboardingViewModel: @unchecked Sendable {
     var isDownloading = false
     var isModelLoading = false
     var errorMessage: String? = nil
+    private var stateObserver: NSObjectProtocol?
+    
+    deinit {
+        if let stateObserver {
+            NotificationCenter.default.removeObserver(stateObserver)
+        }
+    }
     
     init(transcriptionService: any TranscriptionProvider) {
         self.transcriptionService = transcriptionService
@@ -123,36 +130,46 @@ final class OnboardingViewModel: @unchecked Sendable {
     
     @MainActor
     private func subscribeToStateChanges() {
-        Task {
-            await transcriptionService.setOnStateChanged { [weak self] state in
-                guard let self else { return }
-                Task { @MainActor in
-                    switch state {
-                    case .downloading(let progress):
-                        self.downloadProgress = progress
-                        self.isDownloading = true
-                        self.isModelLoading = false
-                        self.errorMessage = nil
-                    case .loading:
-                        self.downloadProgress = 0.99
-                        self.isDownloading = false
-                        self.isModelLoading = true
-                        self.errorMessage = nil
-                    case .ready:
-                        self.downloadProgress = 1.0
-                        self.isDownloading = false
-                        self.isModelLoading = false
-                        self.errorMessage = nil
-                    case .error(let errorMsg):
-                        self.downloadProgress = 0.0
-                        self.isDownloading = false
-                        self.isModelLoading = false
-                        self.errorMessage = errorMsg
-                        AppLogger.error("Error downloading model in onboarding: \(errorMsg)")
-                    default:
-                        break
-                    }
+        if let stateObserver {
+            NotificationCenter.default.removeObserver(stateObserver)
+        }
+        
+        stateObserver = NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("TranscriptionServiceStateChanged"),
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self = self,
+                  let state = notification.userInfo?["state"] as? TranscriptionService.ServiceState else { return }
+            
+            switch state {
+            case .downloading(let progress):
+                self.downloadProgress = progress
+                self.isDownloading = true
+                self.isModelLoading = false
+                self.errorMessage = nil
+            case .loading:
+                self.downloadProgress = 0.99
+                self.isDownloading = false
+                self.isModelLoading = true
+                self.errorMessage = nil
+            case .ready:
+                self.downloadProgress = 1.0
+                self.isDownloading = false
+                self.isModelLoading = false
+                self.errorMessage = nil
+                if let stateObserver = self.stateObserver {
+                    NotificationCenter.default.removeObserver(stateObserver)
+                    self.stateObserver = nil
                 }
+            case .error(let errorMsg):
+                self.downloadProgress = 0.0
+                self.isDownloading = false
+                self.isModelLoading = false
+                self.errorMessage = errorMsg
+                AppLogger.error("Error downloading model in onboarding: \(errorMsg)")
+            default:
+                break
             }
         }
     }

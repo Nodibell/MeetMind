@@ -105,7 +105,7 @@ actor TranscriptionService: TranscriptionProvider {
                     model: model,
                     modelFolder: modelFolderURL.path,
                     verbose: false,
-                    prewarm: true,
+                    prewarm: false,
                     download: false
                 )
 
@@ -119,8 +119,9 @@ actor TranscriptionService: TranscriptionProvider {
                 throw CancellationError()
             } catch {
                 AppLogger.error("Failed to load WhisperKit model", error: error)
-                updateState(.error(String(localized: "Не вдалося завантажити модель: \(error.localizedDescription)")))
-                throw TranscriptionError.modelLoadFailed(error.localizedDescription)
+                let detail = error.localizedDescription.isEmpty ? String(describing: error) : error.localizedDescription
+                updateState(.error(String(localized: "Не вдалося завантажити модель: \(detail)")))
+                throw TranscriptionError.modelLoadFailed(detail)
             }
         }
 
@@ -259,18 +260,47 @@ actor TranscriptionService: TranscriptionProvider {
             scheduleUnload()
         }
 
+        final class SafeTracker: @unchecked Sendable {
+            private var lastLoggedWindow = -1
+            private let lock = NSLock()
+            
+            func shouldLog(windowId: Int) -> Bool {
+                lock.lock()
+                defer { lock.unlock() }
+                if windowId != lastLoggedWindow {
+                    lastLoggedWindow = windowId
+                    return true
+                }
+                return false
+            }
+        }
+        let tracker = SafeTracker()
+
         do {
             let results = try await whisperKit.transcribe(
                 audioPath: url.path,
                 decodeOptions: options,
                 callback: { [weak self] progress in
-                    let currentProgress = min(1.0, Double(progress.windowId + 1) / Double(totalWindows))
+                    let currentWindow = progress.windowId + 1
+                    let estimatedTotal = max(totalWindows, currentWindow)
+                    let currentProgress = min(0.99, Double(currentWindow) / Double(estimatedTotal))
+                    let percent = Int(round(currentProgress * 100))
+                    if tracker.shouldLog(windowId: progress.windowId) {
+                        AppLogger.ai("Transcription progress: \(percent)% (window \(currentWindow)/\(estimatedTotal))")
+                    }
                     Task { [weak self] in
                         await self?.updateState(.transcribing(progress: currentProgress))
                     }
-                    return true
+                    return !Task.isCancelled
                 }
             )
+
+            if Task.isCancelled {
+                throw CancellationError()
+            }
+
+            let rawSegmentsCount = results.reduce(0) { $0 + $1.segments.count }
+            AppLogger.ai("WhisperKit completed transcription. Generated \(rawSegmentsCount) raw text segments.")
 
             // 3. Diarization (Speaker Recognition) via FluidAudio
             AppLogger.ai("Starting FluidAudio speaker diarization...")
@@ -281,14 +311,23 @@ actor TranscriptionService: TranscriptionProvider {
 
             do {
                 try await diarizationEngine.prepareModels()
+                if Task.isCancelled {
+                    throw CancellationError()
+                }
+                AppLogger.ai("FluidAudio models loaded, starting diarization inference...")
                 updateState(.diarizing)
                 let (diarizationSegments, centroids) = try await diarizationEngine.diarize(fileURL: url)
+                if Task.isCancelled {
+                    throw CancellationError()
+                }
+                AppLogger.ai("FluidAudio diarization complete, found \(diarizationSegments.count) voice segments. Aligning speakers...")
                 centroidsToSave = centroids
                 segments = diarizationEngine.alignSpeakers(
                     textSegments: segments,
                     diarizationSegments: diarizationSegments
                 )
                 
+                AppLogger.ai("Speakers aligned. Identifying speaker names...")
                 // New: Identify speakers by name from centroids
                 segments = await diarizationEngine.identifySpeakers(segments: segments, centroids: centroids)
                 
@@ -296,8 +335,15 @@ actor TranscriptionService: TranscriptionProvider {
                 // Free CoreML models after use
                 await diarizationEngine.unloadModels()
             } catch {
+                if Task.isCancelled {
+                    throw CancellationError()
+                }
                 AppLogger.aiError("Diarization failed, continuing without speaker labels", error: error)
                 // Continue without speaker labels — transcription is still valid
+            }
+
+            if Task.isCancelled {
+                throw CancellationError()
             }
 
             // Detect dominant language
@@ -326,6 +372,10 @@ actor TranscriptionService: TranscriptionProvider {
 
             return document
         } catch {
+            if Task.isCancelled {
+                updateState(.ready)
+                throw CancellationError()
+            }
             updateState(.error(String(localized: "Помилка транскрипції файлу: \(error.localizedDescription)")))
             throw TranscriptionError.transcriptionFailed(error.localizedDescription)
         }
@@ -384,6 +434,12 @@ actor TranscriptionService: TranscriptionProvider {
     private func updateState(_ newState: ServiceState) {
         state = newState
         onStateChanged?(newState)
+        
+        NotificationCenter.default.post(
+            name: NSNotification.Name("TranscriptionServiceStateChanged"),
+            object: nil,
+            userInfo: ["state": newState]
+        )
     }
 
     /// Check if the service is ready for transcription

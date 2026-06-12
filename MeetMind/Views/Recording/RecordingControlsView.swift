@@ -29,9 +29,7 @@ struct RecordingControlsView: View {
                     customPickerOption("Мікс", systemImage: "plus.circle.fill", source: .mixed)
                 }
                 .padding(Theme.Spacing.xxs)
-                .background(Theme.Colors.backgroundSecondary)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.CornerRadius.md))
-                .overlay(RoundedRectangle(cornerRadius: Theme.CornerRadius.md).stroke(Theme.Colors.border.opacity(0.3), lineWidth: 0.5))
+                .glassBackground(cornerRadius: Theme.CornerRadius.md)
                 .frame(width: 320)
                 .disabled(viewModel.state == .recording)
 
@@ -148,9 +146,9 @@ struct RecordingControlsView: View {
                     Button(action: handlePauseTap) {
                         ZStack {
                             Circle()
-                                .fill(Theme.Colors.backgroundSecondary)
+                                .fill(.ultraThinMaterial)
                                 .frame(width: 56, height: 56)
-                                .overlay(Circle().stroke(Color.white.opacity(0.1), lineWidth: 1))
+                                .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 1))
                             
                             Image(systemName: viewModel.audioManager.isPaused ? "play.fill" : "pause.fill")
                                 .font(.system(size: 20, weight: .bold))
@@ -195,8 +193,7 @@ struct RecordingControlsView: View {
         }
         .padding(.horizontal, Theme.Spacing.md)
         .padding(.vertical, Theme.Spacing.xs)
-        .background(Theme.Colors.surfacePrimary.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: Theme.CornerRadius.md))
+        .glassBackground(cornerRadius: Theme.CornerRadius.md)
     }
 
     // MARK: - System Audio Source Picker
@@ -234,8 +231,7 @@ struct RecordingControlsView: View {
         }
         .padding(.horizontal, Theme.Spacing.md)
         .padding(.vertical, Theme.Spacing.xs)
-        .background(Theme.Colors.surfacePrimary.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: Theme.CornerRadius.md))
+        .glassBackground(cornerRadius: Theme.CornerRadius.md)
     }
 
     // MARK: - Language Picker
@@ -259,8 +255,7 @@ struct RecordingControlsView: View {
         }
         .padding(.horizontal, Theme.Spacing.md)
         .padding(.vertical, Theme.Spacing.xs)
-        .background(Theme.Colors.surfacePrimary.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: Theme.CornerRadius.md))
+        .glassBackground(cornerRadius: Theme.CornerRadius.md)
     }
 
     // MARK: - Helpers
@@ -339,7 +334,17 @@ struct RecordingControlsView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, Theme.Spacing.xs + 2)
             .foregroundStyle(isSelected ? .white : Theme.Colors.textSecondary)
-            .background(isSelected ? Theme.Colors.accentPrimary : Color.clear)
+            .background(
+                Group {
+                    if isSelected {
+                        Theme.Gradients.accent
+                            .overlay(
+                                RoundedRectangle(cornerRadius: Theme.CornerRadius.sm)
+                                    .stroke(Color.white.opacity(0.18), lineWidth: 0.5)
+                            )
+                    }
+                }
+            )
             .clipShape(RoundedRectangle(cornerRadius: Theme.CornerRadius.sm))
         }
         .buttonStyle(.plain)

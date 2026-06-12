@@ -10,6 +10,7 @@ import SwiftUI
 /// Main recording screen with waveform, controls, and live transcript
 struct RecordingView: View {
     @Bindable var viewModel: RecordingViewModel
+    @State private var showCancelAlert = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -27,17 +28,7 @@ struct RecordingView: View {
                 .padding(.top, Theme.Spacing.sm)
             }
             
-            // Transcription progress
-            if !viewModel.transcriptionProgress.isEmpty {
-                ErrorBannerView(
-                    message: viewModel.transcriptionProgress,
-                    style: .info
-                )
-                .padding(.horizontal, Theme.Spacing.lg)
-                .padding(.top, Theme.Spacing.sm)
-            }
-            
-            // Main content
+
             ScrollView {
                 VStack(spacing: Theme.Spacing.xl) {
                     Spacer(minLength: Theme.Spacing.lg)
@@ -61,9 +52,43 @@ struct RecordingView: View {
                 .padding(.bottom, Theme.Spacing.xxl)
             }
         }
-        .background(Theme.Colors.backgroundPrimary)
+        .background(
+            ZStack {
+                Theme.Colors.backgroundPrimary
+                
+                // Ambient colorful glow circles for premium liquid glass backdrop
+                GeometryReader { geo in
+                    ZStack {
+                        Circle()
+                            .fill(Theme.Colors.accentPrimary.opacity(0.12))
+                            .frame(width: geo.size.width * 0.6)
+                            .blur(radius: 60)
+                            .offset(x: geo.size.width * 0.3, y: geo.size.height * 0.1)
+                        
+                        Circle()
+                            .fill(Theme.Colors.accentSecondary.opacity(0.10))
+                            .frame(width: geo.size.width * 0.5)
+                            .blur(radius: 50)
+                            .offset(x: -geo.size.width * 0.2, y: geo.size.height * 0.4)
+                    }
+                }
+            }
+        )
         .task {
+            // Only pre-warm the live model when truly idle.
+            // Skip if an import or post-processing is already running — it
+            // manages its own model lifecycle and this would cause a wasted
+            // init that gets immediately cancelled.
+            guard viewModel.state == .idle else { return }
             await viewModel.initializeTranscription()
+        }
+        .alert("Зупинити та видалити запис?", isPresented: $showCancelAlert) {
+            Button("Скасувати", role: .cancel) {}
+            Button("Видалити", role: .destructive) {
+                viewModel.cancelActiveProcessing()
+            }
+        } message: {
+            Text("Зараз триває запис або транскрибування цієї наради. Якщо ви видалите її, процес буде зупинено, а всі отримані дані (запис та транскрипт) буде видалено безповоротно.")
         }
     }
     
@@ -130,73 +155,94 @@ struct RecordingView: View {
                 }
             }
         }
-        .frame(height: 120)
+        .frame(height: (viewModel.state == .preparing || viewModel.state == .extracting || viewModel.state == .transcribing || viewModel.state == .summarizing || viewModel.state == .stopping) ? 145 : 120)
     }
     
     // MARK: - Processing Indicator
     
     private var processingIndicator: some View {
-        VStack(spacing: Theme.Spacing.md) {
-            if viewModel.state == .extracting {
-                // Detailed import pipeline progress
-                VStack(spacing: Theme.Spacing.sm) {
-                    HStack(spacing: Theme.Spacing.sm) {
-                        Image(systemName: "arrow.down.circle")
-                            .foregroundStyle(Theme.Colors.accentPrimary)
-                            .font(.system(size: 16))
-                        Text(viewModel.importProgressStage)
-                            .font(Theme.Typography.captionMedium)
-                            .foregroundStyle(Theme.Colors.textSecondary)
-                    }
-
-                    ProgressView(value: viewModel.importProgressValue, total: 1.0)
-                        .progressViewStyle(.linear)
-                        .tint(Theme.Colors.accentPrimary)
-                        .frame(maxWidth: 220)
-
-                    Text(String(format: "%.0f%%", viewModel.importProgressValue * 100))
-                        .font(Theme.Typography.monoCaption)
-                        .foregroundStyle(Theme.Colors.textTertiary)
-                }
-            } else if viewModel.state == .transcribing {
-                VStack(spacing: Theme.Spacing.xs) {
-                    ProgressView(value: viewModel.transcriptionProgressValue, total: 1.0)
-                        .progressViewStyle(.linear)
-                        .tint(Theme.Colors.accentPrimary)
-                        .frame(maxWidth: 200)
-                    
-                    // Show download/init status when available, else show percentage
-                    if !viewModel.transcriptionProgress.isEmpty {
-                        Text(viewModel.transcriptionProgress)
-                            .font(Theme.Typography.caption)
-                            .foregroundStyle(Theme.Colors.textSecondary)
-                    } else {
-                        Text(String(format: "%.0f%%", viewModel.transcriptionProgressValue * 100))
-                            .font(Theme.Typography.monoCaption)
-                            .foregroundStyle(Theme.Colors.textTertiary)
-                    }
-                }
-            } else {
-                ProgressView()
-                    .scaleEffect(0.9)
-                    .tint(Theme.Colors.accentPrimary)
+        VStack(spacing: Theme.Spacing.sm) {
+            HStack(spacing: Theme.Spacing.xs) {
+                Image(systemName: currentStageIcon)
+                    .foregroundStyle(Theme.Colors.accentPrimary)
+                    .font(.system(size: 14))
                 
-                Text(processingLabel)
-                    .font(Theme.Typography.caption)
+                Text(currentStageLabel)
+                    .font(Theme.Typography.captionMedium)
                     .foregroundStyle(Theme.Colors.textSecondary)
+                
+                Spacer()
+                
+                Text(String(format: "%.0f%%", viewModel.overallProgress * 100))
+                    .font(Theme.Typography.monoCaption)
+                    .foregroundStyle(Theme.Colors.accentPrimary)
+                    .fontWeight(.semibold)
             }
+            .frame(maxWidth: 220)
+            
+            ProgressView(value: viewModel.overallProgress, total: 1.0)
+                .progressViewStyle(.linear)
+                .tint(Theme.Colors.accentPrimary)
+                .frame(maxWidth: 220)
+            
+            let detail = currentStageDetail
+            if !detail.isEmpty {
+                Text(detail)
+                    .font(Theme.Typography.caption)
+                    .foregroundStyle(Theme.Colors.textTertiary)
+                    .lineLimit(1)
+            }
+            
+            Button(action: {
+                showCancelAlert = true
+            }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "xmark.circle.fill")
+                    Text("Скасувати")
+                }
+                .font(Theme.Typography.caption)
+                .foregroundStyle(Theme.Colors.error)
+                .padding(.horizontal, Theme.Spacing.md)
+                .padding(.vertical, 3)
+                .background(Theme.Colors.error.opacity(0.1))
+                .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 4)
         }
-        .frame(height: 80)
+        .frame(height: 110)
     }
     
-    private var processingLabel: LocalizedStringKey {
+    private var currentStageIcon: String {
         switch viewModel.state {
-        case .preparing: return "Підготовка джерела аудіо..."
-        case .extracting: return "Вилучення аудіодоріжки з файлу..."
-        case .transcribing: return "Транскрипція аудіо (high-quality)..."
-        case .summarizing: return "Генерація резюме через AI..."
+        case .preparing: return "cpu"
+        case .extracting: return "arrow.down.circle"
+        case .transcribing: return "text.viewfinder"
+        case .summarizing: return "sparkles"
+        case .stopping: return "square.and.arrow.down"
+        default: return "hourglass"
+        }
+    }
+    
+    private var currentStageLabel: LocalizedStringKey {
+        switch viewModel.state {
+        case .preparing: return "Підготовка..."
+        case .extracting: return "Вилучення аудіо..."
+        case .transcribing: return "Транскрипція..."
+        case .summarizing: return "Генерація резюме..."
         case .stopping: return "Зупинка запису..."
-        default: return ""
+        default: return "Обробка..."
+        }
+    }
+    
+    private var currentStageDetail: String {
+        switch viewModel.state {
+        case .extracting:
+            return viewModel.importProgressStage
+        case .transcribing:
+            return viewModel.transcriptionProgressText
+        default:
+            return ""
         }
     }
     

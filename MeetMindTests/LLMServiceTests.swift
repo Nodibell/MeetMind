@@ -123,18 +123,18 @@ final class LLMServiceTests: XCTestCase {
         XCTAssertTrue(compatibility.issue?.contains("LM Studio server") == true)
     }
     
+    @MainActor
     func testLLMServiceSupportUnloadDeepModel() async {
         let service = LLMService()
         await service.unloadDeepModel()
         XCTAssertTrue(true)
     }
     
+    @MainActor
     func testAppleIntelligenceUnsupportedLanguages() async {
         let service = LLMService()
         
-        await MainActor.run {
-            AppSettings.shared.llmProvider = .appleIntelligence
-        }
+        AppSettings.shared.llmProvider = .appleIntelligence
         
         do {
             _ = try await service.generateSummary(transcript: "Привіт, це нарада українською мовою.", targetLanguage: "uk")
@@ -146,6 +146,7 @@ final class LLMServiceTests: XCTestCase {
     }
 }
 
+@MainActor
 final class MeetMindDiarizationEngineTests: XCTestCase {
     
     func testAlignSpeakers() async throws {
@@ -166,7 +167,7 @@ final class MeetMindDiarizationEngineTests: XCTestCase {
             DiarizationSegment(speakerID: "SPEAKER_01", startTime: 7.5, endTime: 15.0)
         ]
         
-        let aligned = await engine.alignSpeakers(textSegments: textSegments, diarizationSegments: speakerSegments)
+        let aligned = engine.alignSpeakers(textSegments: textSegments, diarizationSegments: speakerSegments)
         
         XCTAssertEqual(aligned.count, 3)
         
@@ -199,7 +200,7 @@ final class MeetMindDiarizationEngineTests: XCTestCase {
             DiarizationSegment(speakerID: "SPEAKER_C", startTime: 3.2, endTime: 10.0)
         ]
         
-        let aligned = await engine.alignSpeakers(textSegments: textSegments, diarizationSegments: speakerSegments)
+        let aligned = engine.alignSpeakers(textSegments: textSegments, diarizationSegments: speakerSegments)
         
         XCTAssertEqual(aligned.count, 1)
         

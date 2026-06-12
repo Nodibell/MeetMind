@@ -38,6 +38,81 @@ final class RecordingViewModel {
     var isTranscriptionReady: Bool = false
     var transcriptionProgress: String = ""
     var transcriptionProgressValue: Double = 0.0
+    var transcriptionServiceState: TranscriptionService.ServiceState = .notReady
+
+    /// Monotonically increasing overall progress of the current operation (recording processing or file import)
+    var overallProgress: Double {
+        switch state {
+        case .idle:
+            return 0.0
+        case .preparing:
+            return 0.05
+        case .extracting:
+            // Map importProgressValue (0.0 to 0.20) to [0.05, 0.15]
+            let normalized = min(1.0, max(0.0, importProgressValue / 0.20))
+            return 0.05 + normalized * 0.10
+        case .transcribing:
+            // Calculate transcription phase progress based on the service state
+            let transProgress = progressFor(transcriptionServiceState)
+            // If it's an import, map transcription progress [0.0, 1.0] to [0.15, 0.85]
+            // If it's a stopped recording, map transcription progress [0.0, 1.0] to [0.05, 0.85]
+            let isImport = importProgressValue > 0.0
+            let start = isImport ? 0.15 : 0.05
+            let end = 0.85
+            return start + transProgress * (end - start)
+        case .summarizing:
+            return 0.90
+        case .complete:
+            return 1.0
+        case .error:
+            return 0.0
+        default:
+            return 0.0
+        }
+    }
+    
+    private func progressFor(_ serviceState: TranscriptionService.ServiceState) -> Double {
+        switch serviceState {
+        case .notReady:
+            return 0.0
+        case .downloading(let progress):
+            return progress * 0.08
+        case .loading:
+            return 0.09
+        case .ready:
+            return 0.10
+        case .transcribing(let progress):
+            return 0.10 + progress * 0.80
+        case .preparingDiarization:
+            return 0.92
+        case .diarizing:
+            return 0.95
+        case .error:
+            return 0.0
+        }
+    }
+    
+    var transcriptionProgressText: String {
+        switch transcriptionServiceState {
+        case .downloading(let progress):
+            let percentInt = Int(round(progress * 100))
+            return String(localized: "Завантаження моделі: \(percentInt)%")
+        case .loading:
+            return String(localized: "Ініціалізація моделі AI...")
+        case .ready:
+            return ""
+        case .transcribing(let progress):
+            return String(localized: "Транскрибування...")
+        case .preparingDiarization:
+            return String(localized: "Підготовка діаризації...")
+        case .diarizing:
+            return String(localized: "Розпізнавання спікерів...")
+        case .error(let msg):
+            return msg
+        default:
+            return ""
+        }
+    }
 
     // Import pipeline progress (used during processImportedFile)
     /// Human-readable description of the current import stage
@@ -53,11 +128,19 @@ final class RecordingViewModel {
     var completedMeetingID: UUID?
     var isFloatingIndicatorVisible = true
     private var isTranscribingLive = false
+    private var stateObserver: NSObjectProtocol?
+
+    deinit {
+        if let stateObserver {
+            NotificationCenter.default.removeObserver(stateObserver)
+        }
+    }
 
     // MARK: - Private
     private var recordingURL: URL?
     private var liveTranscriptionTask: Task<Void, Never>?
-    private(set) var currentMeeting: Meeting?
+    private var activeProcessingTask: Task<Void, Never>?
+    var currentMeeting: Meeting?
     private var modelContext: ModelContext?
     private var repository: MeetingRepository?
     private let exportUseCase = ExportMeetingUseCase()
@@ -116,34 +199,38 @@ final class RecordingViewModel {
     // MARK: - Setup
 
     private func setupCallbacks() {
-        Task {
-            await transcriptionService.setOnStateChanged { [weak self] newState in
-                guard let self else { return }
-                Task { @MainActor in
-                    switch newState {
-                    case .downloading(let progress):
-                        let percentInt = Int(round(progress * 100))
-                        self.transcriptionProgress = String(localized: "Завантаження моделі: \(percentInt)%")
-                        // Show download progress in first half of the bar (0% → 50%)
-                        self.transcriptionProgressValue = progress * 0.5
-                        self.isTranscriptionReady = false
-                    case .loading:
-                        self.transcriptionProgress = String(localized: "Ініціалізація моделі AI...")
-                        self.transcriptionProgressValue = 0.5
-                        self.isTranscriptionReady = false
-                    case .ready:
-                        self.transcriptionProgress = ""
-                        self.isTranscriptionReady = true
-                    case .error(let msg):
-                        self.transcriptionProgress = msg
-                        self.isTranscriptionReady = false
-                    case .transcribing(let progress):
-                        // Transcription occupies second half of the bar (50% → 100%)
-                        self.transcriptionProgressValue = 0.5 + progress * 0.5
-                    default:
-                        break
-                    }
-                }
+        stateObserver = NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("TranscriptionServiceStateChanged"),
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self = self,
+                  let newState = notification.userInfo?["state"] as? TranscriptionService.ServiceState else { return }
+            
+            self.transcriptionServiceState = newState
+            
+            switch newState {
+            case .downloading(let progress):
+                let percentInt = Int(round(progress * 100))
+                self.transcriptionProgress = String(localized: "Завантаження моделі: \(percentInt)%")
+                // Show download progress in first half of the bar (0% → 50%)
+                self.transcriptionProgressValue = progress * 0.5
+                self.isTranscriptionReady = false
+            case .loading:
+                self.transcriptionProgress = String(localized: "Ініціалізація моделі AI...")
+                self.transcriptionProgressValue = 0.5
+                self.isTranscriptionReady = false
+            case .ready:
+                self.transcriptionProgress = ""
+                self.isTranscriptionReady = true
+            case .error(let msg):
+                self.transcriptionProgress = msg
+                self.isTranscriptionReady = false
+            case .transcribing(let progress):
+                // Transcription occupies second half of the bar (50% → 100%)
+                self.transcriptionProgressValue = 0.5 + progress * 0.5
+            default:
+                break
             }
         }
     }
@@ -305,8 +392,9 @@ final class RecordingViewModel {
         repository?.trySave()
 
         // Start post-processing
-        Task {
+        activeProcessingTask = Task {
             await postProcess()
+            activeProcessingTask = nil
         }
     }
 
@@ -386,6 +474,8 @@ final class RecordingViewModel {
         do {
             let document = try await transcriptionService.transcribeFile(at: recordingURL)
 
+            guard !Task.isCancelled else { return }
+
             await MainActor.run {
                 self.fullTranscript = document
                 self.liveTranscript = document.segments
@@ -403,6 +493,7 @@ final class RecordingViewModel {
             repository?.trySave()
 
         } catch {
+            guard !Task.isCancelled else { return }
             await MainActor.run {
                 // Fall back to live transcript if post-processing fails
                 self.errorMessage = "Повна транскрипція не вдалась, використовується live-версія: \(error.localizedDescription)"
@@ -440,6 +531,8 @@ final class RecordingViewModel {
             }
         }
 
+        guard !Task.isCancelled else { return }
+
         // Step 2: AI Summary
         await MainActor.run {
             state = .summarizing
@@ -452,6 +545,7 @@ final class RecordingViewModel {
                 ?? liveTranscript.map { "[\($0.startTime.formattedTimestamp)] \($0.text)" }.joined(separator: "\n")
 
             guard !transcriptText.isEmpty else {
+                guard !Task.isCancelled else { return }
                 await MainActor.run {
                     state = .complete
                     currentMeeting?.status = .complete
@@ -463,6 +557,7 @@ final class RecordingViewModel {
             // Generate title
             do {
                 let newTitle = try await llmService.generateTitle(transcript: transcriptText)
+                guard !Task.isCancelled else { return }
                 if !newTitle.isEmpty {
                     await MainActor.run {
                         self.meetingTitle = newTitle
@@ -471,6 +566,7 @@ final class RecordingViewModel {
                     }
                 }
             } catch {
+                guard !Task.isCancelled else { return }
                 AppLogger.warning("Failed to generate meeting title: \(error.localizedDescription)")
             }
 
@@ -478,18 +574,23 @@ final class RecordingViewModel {
             await llmService.setOnTokenReceived { [weak self] token in
                 guard let self else { return }
                 Task { @MainActor in
+                    guard !Task.isCancelled else { return }
                     self.streamingSummary += token
                 }
             }
 
             let targetLanguage = await MainActor.run { AppSettings.shared.summaryLanguage }
             let summaryResult = try await llmService.generateSummary(transcript: transcriptText, targetLanguage: targetLanguage)
+            
+            guard !Task.isCancelled else { return }
 
             // Save summary to file
             if let filenameBase = await MainActor.run(body: { currentMeeting?.filenameBase }) {
                 let summaryURL = Constants.summariesDirectory
                     .appendingPathComponent("\(filenameBase).\(Constants.summaryFileExtension)")
                 try summaryResult.write(to: summaryURL, atomically: true, encoding: .utf8)
+                
+                guard !Task.isCancelled else { return }
                 
                 await MainActor.run {
                     self.summary = summaryResult
@@ -500,10 +601,13 @@ final class RecordingViewModel {
             }
 
         } catch {
+            guard !Task.isCancelled else { return }
             await MainActor.run {
                 self.errorMessage = "Помилка генерації резюме: \(error.localizedDescription)"
             }
         }
+
+        guard !Task.isCancelled else { return }
 
         // Complete
         await MainActor.run {
@@ -544,7 +648,14 @@ final class RecordingViewModel {
 
     // MARK: - Import File Processing
     
-    func processImportedFile(at url: URL) async {
+    func processImportedFile(at url: URL) {
+        activeProcessingTask = Task {
+            await performImport(at: url)
+            activeProcessingTask = nil
+        }
+    }
+
+    private func performImport(at url: URL) async {
         let accessGranted = url.startAccessingSecurityScopedResource()
         defer {
             if accessGranted {
@@ -577,6 +688,12 @@ final class RecordingViewModel {
                 self.importProgressValue = 0.05
             }
             try await AudioExtractor.extractAudio(from: url, to: targetURL)
+            
+            guard !Task.isCancelled else {
+                try? FileManager.default.removeItem(at: targetURL)
+                return
+            }
+            
             await MainActor.run { self.importProgressValue = 0.20 }
             
             // 3. Create the Meeting object
@@ -590,11 +707,19 @@ final class RecordingViewModel {
                 self.currentMeeting?.status = .transcribing
                 self.importProgressStage = String(localized: "Транскрибуємо аудіо...")
                 self.importProgressValue = 0.25
+                // Clear any stale model-init progress string so the transcription
+                // progress bar starts clean even after a WhisperKit re-init.
+                self.transcriptionProgress = ""
+                self.transcriptionProgressValue = 0.0
                 try? self.modelContext?.save()
             }
             
+            guard !Task.isCancelled else { return }
+            
             // 4. Transcribe using transcriptionService.transcribeFile
             let document = try await transcriptionService.transcribeFile(at: targetURL)
+            
+            guard !Task.isCancelled else { return }
             
             await MainActor.run {
                 self.fullTranscript = document
@@ -612,11 +737,15 @@ final class RecordingViewModel {
                     .appendingPathComponent("\(filenameBase).\(Constants.transcriptFileExtension)")
                 try document.save(to: transcriptURL)
                 
+                guard !Task.isCancelled else { return }
+                
                 await MainActor.run {
                     self.currentMeeting?.transcriptFilename = transcriptURL.lastPathComponent
                     self.repository?.trySave()
                 }
             }
+            
+            guard !Task.isCancelled else { return }
             
             // 6. Summarize & complete
             await MainActor.run {
@@ -632,6 +761,7 @@ final class RecordingViewModel {
                 // Generate title
                 do {
                     let newTitle = try await llmService.generateTitle(transcript: transcriptText)
+                    guard !Task.isCancelled else { return }
                     if !newTitle.isEmpty {
                         await MainActor.run {
                             self.meetingTitle = newTitle
@@ -640,6 +770,7 @@ final class RecordingViewModel {
                         }
                     }
                 } catch {
+                    guard !Task.isCancelled else { return }
                     AppLogger.warning("Failed to generate meeting title: \(error.localizedDescription)")
                 }
                 
@@ -647,6 +778,7 @@ final class RecordingViewModel {
                 await llmService.setOnTokenReceived { [weak self] token in
                     guard let self else { return }
                     Task { @MainActor in
+                        guard !Task.isCancelled else { return }
                         self.streamingSummary += token
                     }
                 }
@@ -654,11 +786,15 @@ final class RecordingViewModel {
                 let targetLanguage = await MainActor.run { AppSettings.shared.summaryLanguage }
                 let summaryResult = try await llmService.generateSummary(transcript: transcriptText, targetLanguage: targetLanguage)
                 
+                guard !Task.isCancelled else { return }
+                
                 // Save summary
                 if let filenameBase = await MainActor.run(body: { currentMeeting?.filenameBase }) {
                     let summaryURL = Constants.summariesDirectory
                         .appendingPathComponent("\(filenameBase).\(Constants.summaryFileExtension)")
                     try summaryResult.write(to: summaryURL, atomically: true, encoding: .utf8)
+                    
+                    guard !Task.isCancelled else { return }
                     
                     await MainActor.run {
                         self.summary = summaryResult
@@ -668,6 +804,8 @@ final class RecordingViewModel {
                     }
                 }
             }
+            
+            guard !Task.isCancelled else { return }
             
             // Complete
             await MainActor.run {
@@ -687,6 +825,7 @@ final class RecordingViewModel {
             }
             
         } catch {
+            guard !Task.isCancelled else { return }
             await MainActor.run {
                 self.state = .error(error.localizedDescription)
                 self.errorMessage = error.localizedDescription
@@ -695,6 +834,57 @@ final class RecordingViewModel {
                 try? self.modelContext?.save()
             }
         }
+    }
+
+    // MARK: - Cancellation & Deletion Support
+    
+    @MainActor
+    func cancelActiveProcessing() {
+        // 1. Stop audio recording if active
+        if state == .recording {
+            _ = audioManager.stopRecording()
+        }
+        
+        // 2. Cancel live transcription task
+        liveTranscriptionTask?.cancel()
+        liveTranscriptionTask = nil
+        
+        // 3. Cancel post-processing/import task
+        activeProcessingTask?.cancel()
+        activeProcessingTask = nil
+        
+        // 4. Clean up files and delete current meeting
+        if let meeting = currentMeeting {
+            let fm = FileManager.default
+            
+            if let audioPath = meeting.audioURL?.path {
+                try? fm.removeItem(atPath: audioPath)
+            }
+            if let transcriptPath = meeting.transcriptURL?.path {
+                try? fm.removeItem(atPath: transcriptPath)
+            }
+            if let summaryPath = meeting.summaryURL?.path {
+                try? fm.removeItem(atPath: summaryPath)
+            }
+            
+            // Clean up FTS search index entries
+            let segmentIDs = meeting.transcriptSegments.map { $0.id }
+            if !segmentIDs.isEmpty {
+                Task {
+                    let vectorStore = VectorStore()
+                    await vectorStore.clearFTSIndex(for: segmentIDs)
+                }
+            }
+            
+            // Delete from context
+            if let context = modelContext {
+                context.delete(meeting)
+                try? context.save()
+            }
+        }
+        
+        // 5. Reset VM state back to idle
+        resetForNewRecording()
     }
 
     // MARK: - Reset
@@ -712,6 +902,7 @@ final class RecordingViewModel {
         completedMeetingID = nil
         isFloatingIndicatorVisible = true
         transcriptionProgressValue = 0
+        transcriptionServiceState = .notReady
     }
 
     // MARK: - Helpers
